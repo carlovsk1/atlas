@@ -70,3 +70,12 @@ test('plan output is sorted', () => {
   const files = new Map([['src/z.ts', 's'], ['src/a.ts', 's']])
   assert.deepEqual(planWork(null, files, new Set(), always).toExtract, ['src/a.ts', 'src/z.ts'])
 })
+
+test('a path no longer matching indexable is reported as removed', () => {
+  const prev = { version: STATE_VERSION, indexedAt: '', commit: '', files: { 'src/old.txt': 'sha1' }, nodesByFile: {} }
+  const files = new Map([['src/old.txt', 'sha1']])
+  const plan = planWork(prev, files, new Set(), (p) => p.endsWith('.ts'))
+  assert.deepEqual(plan.toExtract, [])
+  assert.deepEqual(plan.unchanged, [])
+  assert.deepEqual(plan.removed, ['src/old.txt'])
+})

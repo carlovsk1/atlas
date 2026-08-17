@@ -14,6 +14,7 @@ export function readState(atlasDir) {
   }
 }
 
+/** Writes state to atlasDir, creating the directory if it does not exist. */
 export function writeState(atlasDir, state) {
   mkdirSync(atlasDir, { recursive: true })
   writeFileSync(join(atlasDir, STATE_FILE), JSON.stringify(state, null, 2) + '\n')
@@ -34,7 +35,7 @@ export function planWork(prev, files, dirty, indexable) {
     else toExtract.push(path)
   }
 
-  const removed = Object.keys(usable).filter((path) => !files.has(path))
+  const removed = Object.keys(usable).filter((path) => !files.has(path) || !indexable(path))
 
   toExtract.sort()
   unchanged.sort()
