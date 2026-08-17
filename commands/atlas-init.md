@@ -35,13 +35,27 @@ examples from the inventory, write `.claude/atlas/patterns/<slug>.md`:
 **Applies when:** the situation that should trigger this pattern.
 ```
 
-For each decision already recorded in an ADR or a doc, write
-`.claude/atlas/decisions/<slug>.md`:
+Then ask the history where the undocumented rules are:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/atlas.mjs" --repo . --candidates
+```
+
+It lists files whose commits keep correcting the same thing, which is where a rule
+nobody wrote down usually lives, with the commits as evidence. A commit is a source
+like an ADR is a source, on one condition: the subject has to actually say what was
+decided. `fix(proposals): gate the purchase-date rule and rescue legacy basis rows`
+is a source. `fix: address review` is not, it only proves something was corrected.
+When the subjects are thin, run `--history` on the file and read the diff before
+writing anything, or write nothing.
+
+For each decision recorded in an ADR, a doc, or a commit history that states it,
+write `.claude/atlas/decisions/<slug>.md`:
 
 ```markdown
 # <Decision>
 
-**Source:** `docs/adr/001-example.md`
+**Source:** `docs/adr/001-example.md`, or the commit SHAs that establish it
 
 **Decision:** one sentence.
 
@@ -52,9 +66,10 @@ For each decision already recorded in an ADR or a doc, write
 
 Hard rules:
 - Never invent a pattern you cannot point two real files at.
-- Never invent a decision that has no source document. If the "why" is not
-  written down anywhere, do not write the file.
-- Every path you cite must exist. Verify before writing.
+- Never invent a decision that has no source. If the "why" is not written down
+  anywhere, in a doc or in a commit that states it, do not write the file.
+- Every path you cite must exist, and every SHA you cite must resolve. Verify
+  before writing.
 
 ## Step 3: Refresh the index
 

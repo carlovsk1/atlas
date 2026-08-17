@@ -84,7 +84,7 @@ export function renderIndex({ commit, date, counts, areas, patterns, decisions }
 }
 
 /** Builds the nodes/edges byproduct. Not read by the agent; kept for later tooling. */
-export function buildGraph(nodes, config = {}) {
+export function buildGraph(nodes, config = {}, files = [], imports = []) {
   const out = new Map()
   const edges = []
 
@@ -101,6 +101,29 @@ export function buildGraph(nodes, config = {}) {
       area,
     })
     edges.push({ from: areaId, to: node.id, kind: 'contains' })
+  }
+
+  const symbolCounts = new Map()
+  for (const node of nodes) symbolCounts.set(node.path, (symbolCounts.get(node.path) ?? 0) + 1)
+
+  for (const path of files) {
+    const area = areaOf(path, config)
+    const areaId = `area:${area}`
+    if (!out.has(areaId)) out.set(areaId, { id: areaId, kind: 'area', name: area })
+    out.set(`file:${path}`, {
+      id: `file:${path}`,
+      kind: 'file',
+      name: path.slice(path.lastIndexOf('/') + 1),
+      path,
+      area,
+      symbols: symbolCounts.get(path) ?? 0,
+    })
+    edges.push({ from: areaId, to: `file:${path}`, kind: 'contains' })
+  }
+
+  for (const { from, to } of imports) {
+    if (!out.has(`file:${from}`) || !out.has(`file:${to}`)) continue
+    edges.push({ from: `file:${from}`, to: `file:${to}`, kind: 'imports' })
   }
 
   return {

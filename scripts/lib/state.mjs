@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-export const STATE_VERSION = 1
+export const STATE_VERSION = 2
 
 const STATE_FILE = '.state.json'
 
@@ -26,6 +26,7 @@ function sortKeys(obj) {
 export function writeState(atlasDir, state) {
   mkdirSync(atlasDir, { recursive: true })
   const sorted = { ...state, files: sortKeys(state.files), nodesByFile: sortKeys(state.nodesByFile) }
+  if (state.importsByFile) sorted.importsByFile = sortKeys(state.importsByFile)
   writeFileSync(join(atlasDir, STATE_FILE), JSON.stringify(sorted, null, 2) + '\n')
 }
 

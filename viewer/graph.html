@@ -1,0 +1,963 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Atlas graph</title>
+<style>
+  :root {
+    --ground: #eceee9;
+    --surface: #f7f8f5;
+    --ink: #14181a;
+    --muted: #6a736d;
+    --line: #d4d9d1;
+    --accent: #146b5c;
+    --edge: #8b948d;
+    --warn: #b03f52;
+    --a0: #2f6fb8;
+    --a1: #1a7a63;
+    --a2: #b4661a;
+    --a3: #7a4fc0;
+    --a4: #b03f52;
+    --a5: #4b7d2f;
+    --a6: #1f7f96;
+    --a7: #7a6a3a;
+    --display: ui-sans-serif, system-ui, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0d1110;
+      --surface: #141917;
+      --ink: #e6ebe7;
+      --muted: #8a948c;
+      --line: #232b27;
+      --accent: #57d3b4;
+      --edge: #4a5550;
+      --warn: #ee8092;
+      --a0: #6fa8ee;
+      --a1: #4fc5a6;
+      --a2: #e0a45c;
+      --a3: #b392e8;
+      --a4: #ee8092;
+      --a5: #97cf6b;
+      --a6: #63c2da;
+      --a7: #cbb677;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--display);
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+  }
+
+  .title { font-weight: 650; letter-spacing: -0.01em; }
+  .stamp { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+
+  nav { display: flex; align-items: center; gap: 4px; flex: 1 1 320px; flex-wrap: wrap; }
+
+  nav button, .tool {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink);
+    background: var(--ground);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 4px 9px;
+    cursor: pointer;
+  }
+
+  nav button:hover, .tool:hover { border-color: var(--accent); }
+  a.tool { display: inline-block; text-decoration: none; }
+  nav .sep { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+
+  input[type="search"] {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--ground);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 5px 9px;
+    width: 190px;
+  }
+
+  main { flex: 1 1 auto; display: flex; min-height: 0; }
+
+  #stage { flex: 1 1 auto; position: relative; min-width: 0; }
+  canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+
+  .overlay {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--muted);
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 6px 9px;
+    pointer-events: none;
+  }
+
+  aside {
+    flex: 0 0 320px;
+    border-left: 1px solid var(--line);
+    background: var(--surface);
+    overflow: auto;
+    padding: 14px 16px 32px;
+  }
+
+  aside h2 {
+    margin: 0 0 2px;
+    font-size: 15px;
+    font-family: var(--mono);
+    font-weight: 650;
+    overflow-wrap: anywhere;
+  }
+
+  aside .sub {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  aside h3 {
+    margin: 16px 0 6px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  aside ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+
+  aside li {
+    font-family: var(--mono);
+    font-size: 12px;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    overflow-wrap: anywhere;
+  }
+
+  aside li .n { color: var(--muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+  aside ul.pick li { cursor: pointer; padding: 3px 6px; margin: 0 -6px; border-radius: 3px; }
+  aside ul.pick li:hover { background: var(--ground); }
+  aside .hitrow { color: var(--muted); }
+  aside .hitrow .k { color: var(--ink); }
+  aside li .k { color: var(--muted); }
+  aside .empty { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  aside a { color: var(--accent); text-decoration: none; }
+  aside a:hover { text-decoration: underline; }
+
+  aside details { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 12px; }
+
+  aside details summary {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  aside details ul { margin-top: 8px; }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="title" id="repo">atlas</div>
+      <div class="stamp" id="stamp"></div>
+    </div>
+    <nav id="crumbs"></nav>
+    <input type="search" id="q" placeholder="find a file or symbol" spellcheck="false" />
+    <button class="tool" id="fit">Fit</button>
+  </header>
+
+  <main>
+    <div id="stage">
+      <canvas id="canvas"></canvas>
+      <div class="overlay" id="legend"></div>
+    </div>
+    <aside id="panel"></aside>
+  </main>
+
+<script>
+(function () {
+  const DATA = "__ATLAS_GRAPH__";
+  const MAX_NODES = 300;
+  // A pair of node keys packed into one Map key. A path can hold a space but never a
+  // NUL, and a raw NUL byte sitting in the source is invisible to whoever edits next.
+  const PAIR = "\u0000";
+
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const panel = document.getElementById("panel");
+  const crumbs = document.getElementById("crumbs");
+  const legend = document.getElementById("legend");
+
+  document.getElementById("repo").textContent = DATA.repo;
+  document.getElementById("stamp").textContent =
+    `${DATA.files.length} files · ${DATA.edges.length} imports · ${DATA.commit} · ${DATA.date}`;
+
+  /* ---------- palette ---------- */
+  let palette = {};
+  function readPalette() {
+    const s = getComputedStyle(document.documentElement);
+    palette = {
+      ink: s.getPropertyValue("--ink").trim(),
+      muted: s.getPropertyValue("--muted").trim(),
+      edge: s.getPropertyValue("--edge").trim(),
+      warn: s.getPropertyValue("--warn").trim(),
+      accent: s.getPropertyValue("--accent").trim(),
+      surface: s.getPropertyValue("--surface").trim(),
+      areas: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => s.getPropertyValue(`--a${i}`).trim()),
+    };
+  }
+  readPalette();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    readPalette();
+    draw();
+  });
+
+  const areaNames = [...new Set(DATA.files.map((f) => f[1]))].sort();
+  const areaColor = (area) => palette.areas[areaNames.indexOf(area) % palette.areas.length];
+
+  /* ---------- level building ---------- */
+  const state = { scope: "", selected: null, query: "" };
+
+  function keyFor(index) {
+    const [path, area] = DATA.files[index];
+    if (!state.scope) return { key: area, external: false };
+    if (path === state.scope || path.startsWith(state.scope + "/")) {
+      const rest = path.slice(state.scope ? state.scope.length + 1 : 0);
+      const seg = rest.split("/")[0];
+      return { key: state.scope + "/" + seg, external: false };
+    }
+    return { key: area, external: true };
+  }
+
+  let nodes = [];
+  let links = [];
+  // Nodes with an edge at this level are the only ones the force layout touches; the rest
+  // are parked, see parkOrphans().
+  let moving = [];
+  let orphans = [];
+  let byKey = new Map();
+  let hidden = 0;
+  // File indices the current query matched, or null when the box is empty. The graph
+  // is browsed by directory, so a query has to search the files under a node rather
+  // than the node's own name: at the top level those names are just the five areas.
+  let matched = null;
+  let hits = [];
+
+  function runQuery() {
+    const q = state.query;
+    if (!q) {
+      matched = null;
+      hits = [];
+      return;
+    }
+
+    matched = new Set();
+    hits = [];
+    for (let i = 0; i < DATA.files.length; i++) {
+      const path = DATA.files[i][0];
+      let symbol = null;
+      if (!path.toLowerCase().includes(q)) {
+        for (const [name] of DATA.symbols[i]) {
+          if (name.toLowerCase().includes(q)) {
+            symbol = name;
+            break;
+          }
+        }
+        if (!symbol) continue;
+      }
+      matched.add(i);
+      hits.push([i, symbol]);
+    }
+  }
+
+  // Per node, once per query, because draw() runs on every frame.
+  function markHits() {
+    for (const n of nodes) n.hit = !matched || n.files.some((i) => matched.has(i));
+  }
+
+  function buildLevel() {
+    const groups = new Map();
+    const keyOf = new Array(DATA.files.length);
+
+    for (let i = 0; i < DATA.files.length; i++) {
+      const { key, external } = keyFor(i);
+      keyOf[i] = key;
+      if (!groups.has(key)) groups.set(key, { key, external, files: [], symbols: 0 });
+      const g = groups.get(key);
+      g.files.push(i);
+      g.symbols += DATA.symbols[i].length;
+    }
+
+    let all = [...groups.values()];
+    all.sort((a, b) => b.files.length - a.files.length);
+    hidden = Math.max(0, all.length - MAX_NODES);
+    const kept = all.slice(0, MAX_NODES);
+    const keptKeys = new Set(kept.map((g) => g.key));
+
+    const weights = new Map();
+    for (const [a, b] of DATA.edges) {
+      const ka = keyOf[a];
+      const kb = keyOf[b];
+      if (ka === kb || !keptKeys.has(ka) || !keptKeys.has(kb)) continue;
+      const id = ka + PAIR + kb;
+      weights.set(id, (weights.get(id) ?? 0) + 1);
+    }
+
+    const widest = Math.max(...kept.map((g) => g.files.length));
+
+    byKey = new Map();
+    nodes = kept.map((g, i) => {
+      const isFile = g.files.length === 1 && DATA.files[g.files[0]][0] === g.key;
+      const angle = i * 2.399963;
+      const radius = 30 * Math.sqrt(i + 1);
+      const node = {
+        ...g,
+        isFile,
+        // Outside the scope, the last segment alone is ambiguous: `packages/web/scripts`
+        // and the `scripts` area would both read as "scripts".
+        label: !state.scope || g.external ? g.key : g.key.slice(g.key.lastIndexOf("/") + 1) || g.key,
+        area: DATA.files[g.files[0]][1],
+        // Area proportional to the file count, scaled against the widest node at this
+        // level. A fixed cap on a symbol count saturated long before the sizes said
+        // anything: 1518 files and 397 files came out the same circle.
+        r: 6 + 26 * Math.sqrt(g.files.length / widest),
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius,
+        vx: 0,
+        vy: 0,
+        out: 0,
+        in: 0,
+      };
+      byKey.set(g.key, node);
+      return node;
+    });
+
+    links = [];
+    for (const [id, weight] of weights) {
+      const [a, b] = id.split(PAIR);
+      const source = byKey.get(a);
+      const target = byKey.get(b);
+      source.out += weight;
+      target.in += weight;
+      links.push({ source, target, weight, mutual: weights.has(b + PAIR + a) });
+    }
+
+    for (const n of nodes) n.orphan = n.out === 0 && n.in === 0;
+    moving = nodes.filter((n) => !n.orphan);
+    orphans = nodes.filter((n) => n.orphan);
+
+    // The old level's nodes are gone: a stale hover would dim every node drawn here.
+    hover = null;
+    dragging = null;
+    panning = null;
+    downHit = null;
+    alpha = 1;
+    markHits();
+    renderCrumbs();
+    renderLegend();
+    selectNode(state.selected && byKey.has(state.selected) ? byKey.get(state.selected) : null);
+  }
+
+  /* ---------- force layout ---------- */
+  // ponytail: O(n^2) repulsion, fine because the level is capped at MAX_NODES.
+  let alpha = 1;
+
+  function step() {
+    if (alpha < 0.005) return false;
+    alpha *= 0.94;
+
+    for (const n of moving) {
+      n.vx *= 0.82;
+      n.vy *= 0.82;
+      n.vx -= n.x * 0.004 * alpha;
+      n.vy -= n.y * 0.004 * alpha;
+    }
+
+    for (let i = 0; i < moving.length; i++) {
+      const a = moving[i];
+      for (let j = i + 1; j < moving.length; j++) {
+        const b = moving[j];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let d2 = dx * dx + dy * dy;
+        if (d2 < 1) {
+          dx = (i - j) * 0.5 + 0.1;
+          dy = (j - i) * 0.5 + 0.1;
+          d2 = dx * dx + dy * dy;
+        }
+        const push = ((a.r + b.r) * 260 * alpha) / d2;
+        const d = Math.sqrt(d2);
+        const fx = (dx / d) * push;
+        const fy = (dy / d) * push;
+        a.vx -= fx;
+        a.vy -= fy;
+        b.vx += fx;
+        b.vy += fy;
+      }
+    }
+
+    for (const l of links) {
+      const dx = l.target.x - l.source.x;
+      const dy = l.target.y - l.source.y;
+      const d = Math.max(1, Math.hypot(dx, dy));
+      const rest = l.source.r + l.target.r + 90;
+      const pull = ((d - rest) * 0.02 * Math.min(3, l.weight) * alpha) / 3;
+      const fx = (dx / d) * pull;
+      const fy = (dy / d) * pull;
+      l.source.vx += fx;
+      l.source.vy += fy;
+      l.target.vx -= fx;
+      l.target.vy -= fy;
+    }
+
+    for (const n of moving) {
+      if (n === dragging) continue;
+      n.x += Math.max(-30, Math.min(30, n.vx));
+      n.y += Math.max(-30, Math.min(30, n.vy));
+    }
+
+    parkOrphans();
+    return true;
+  }
+
+  // A node with no edge at this level has nothing pulling it anywhere, so the centering
+  // force alone flings it off on its own. They read as a shelf under the cluster instead.
+  const SHELF_COLS = 6;
+  const SHELF_GAP = 100;
+
+  function parkOrphans() {
+    if (!orphans.length) return;
+
+    let left = -((Math.min(orphans.length, SHELF_COLS) - 1) * SHELF_GAP) / 2;
+    let top = 0;
+
+    if (moving.length) {
+      const xs = moving.map((n) => n.x);
+      left += (Math.min(...xs) + Math.max(...xs)) / 2;
+      top = Math.max(...moving.map((n) => n.y + n.r)) + 70;
+    }
+
+    orphans.forEach((n, i) => {
+      if (n === dragging || n.pinned) return;
+      n.x = left + (i % SHELF_COLS) * SHELF_GAP;
+      n.y = top + Math.floor(i / SHELF_COLS) * 64;
+    });
+  }
+
+  /* ---------- view transform ---------- */
+  const view = { x: 0, y: 0, k: 1 };
+  let dragging = null;
+  let panning = null;
+  let downAt = null;
+  // What was under the cursor when the press started. The layout keeps moving, so
+  // hit-testing again on release would miss a node that drifted out from under it.
+  let downHit = null;
+  let moved = false;
+  let hover = null;
+
+  function resize() {
+    const ratio = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.round(rect.width * ratio);
+    canvas.height = Math.round(rect.height * ratio);
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    draw();
+  }
+
+  function fit(subset = nodes) {
+    if (!subset.length) return;
+    const rect = canvas.getBoundingClientRect();
+    const xs = subset.map((n) => n.x);
+    const ys = subset.map((n) => n.y);
+    const pad = 60;
+    const w = Math.max(1, Math.max(...xs) - Math.min(...xs)) + pad * 2;
+    const h = Math.max(1, Math.max(...ys) - Math.min(...ys)) + pad * 2;
+    view.k = Math.max(0.15, Math.min(2.2, Math.min(rect.width / w, rect.height / h)));
+    view.x = rect.width / 2 - ((Math.min(...xs) + Math.max(...xs)) / 2) * view.k;
+    view.y = rect.height / 2 - ((Math.min(...ys) + Math.max(...ys)) / 2) * view.k;
+  }
+
+  const toScreen = (n) => [n.x * view.k + view.x, n.y * view.k + view.y];
+
+  function nodeAt(sx, sy) {
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      const [x, y] = toScreen(n);
+      const r = Math.max(6, n.r * view.k);
+      if ((sx - x) ** 2 + (sy - y) ** 2 <= r * r) return n;
+    }
+    return null;
+  }
+
+  /* ---------- drawing ---------- */
+  const matches = (n) => !matched || n.hit;
+
+  // Labels are drawn at a fixed screen size while positions scale, so a long name under a
+  // small node runs into its neighbours. The full name is one hover or click away.
+  const clip = (s, max) => (s.length > max ? s.slice(0, max - 1) + "…" : s);
+
+  function draw() {
+    const rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    const focus = hover ?? (state.selected ? byKey.get(state.selected) : null);
+    const near = new Set();
+    if (focus) {
+      near.add(focus);
+      for (const l of links) {
+        if (l.source === focus) near.add(l.target);
+        if (l.target === focus) near.add(l.source);
+      }
+    }
+
+    for (const l of links) {
+      const [x1, y1] = toScreen(l.source);
+      const [x2, y2] = toScreen(l.target);
+      const lit = !focus || l.source === focus || l.target === focus;
+      // A pair that imports both ways is the one thing this graph exists to shout about,
+      // so it stays legible without having to hover it first.
+      ctx.globalAlpha = lit ? Math.min(0.85, (l.mutual ? 0.45 : 0.22) + l.weight * 0.06) : 0.05;
+      ctx.strokeStyle = lit && focus ? palette.accent : l.mutual ? palette.warn : palette.edge;
+      ctx.lineWidth = Math.min(4, 0.6 + Math.log2(l.weight + 1) * 0.7);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+
+      if (view.k > 0.5 && lit) {
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        const tipR = Math.max(6, l.target.r * view.k) + 2;
+        const tx = x2 - Math.cos(angle) * tipR;
+        const ty = y2 - Math.sin(angle) * tipR;
+        const size = 5;
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(tx - Math.cos(angle - 0.4) * size, ty - Math.sin(angle - 0.4) * size);
+        ctx.lineTo(tx - Math.cos(angle + 0.4) * size, ty - Math.sin(angle + 0.4) * size);
+        ctx.closePath();
+        ctx.fillStyle = focus ? palette.accent : l.mutual ? palette.warn : palette.edge;
+        ctx.fill();
+      }
+    }
+
+    ctx.globalAlpha = 1;
+    for (const n of nodes) {
+      const [x, y] = toScreen(n);
+      const r = Math.max(4, n.r * view.k);
+      const dim = (focus && !near.has(n)) || !matches(n);
+
+      ctx.globalAlpha = dim ? 0.18 : 1;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = areaColor(n.area);
+      ctx.fill();
+
+      if (n.external) {
+        ctx.globalAlpha = dim ? 0.18 : 0.9;
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = palette.surface;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      if (state.selected === n.key) {
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = palette.accent;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      if (!dim && (r > 7 || n === focus)) {
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = palette.ink;
+        ctx.font = "11px ui-monospace, SFMono-Regular, Menlo, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(n === focus ? n.label : clip(n.label, r > 14 ? 40 : 14), x, y + r + 12);
+
+        if (!n.isFile && (r > 14 || n === focus)) {
+          ctx.fillStyle = palette.muted;
+          ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+          ctx.fillText(`${n.files.length} files`, x, y + r + 24);
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  let raf = null;
+  function tick() {
+    const alive = step();
+    draw();
+    raf = alive ? requestAnimationFrame(tick) : null;
+  }
+  function kick() {
+    alpha = Math.max(alpha, 0.35);
+    if (!raf) raf = requestAnimationFrame(tick);
+  }
+
+  /* ---------- panel ---------- */
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  function neighbours(node) {
+    const out = [];
+    const inbound = [];
+    for (const l of links) {
+      if (l.source === node) out.push([l.target.key, l.weight]);
+      if (l.target === node) inbound.push([l.source.key, l.weight]);
+    }
+    out.sort((a, b) => b[1] - a[1]);
+    inbound.sort((a, b) => b[1] - a[1]);
+    return { out, inbound };
+  }
+
+  // Items arrive as HTML, so every caller escapes what it puts in them.
+  function list(items, empty, cls = "") {
+    if (!items.length) return `<div class="empty">${empty}</div>`;
+    const rows = items
+      .map(([a, b, attr = ""]) => `<li ${attr}><span>${a}</span><span class="n">${b}</span></li>`)
+      .join("");
+    return `<ul${cls ? ` class="${cls}"` : ""}>${rows}</ul>`;
+  }
+
+  // Old graphs were built without a root, and a link into the wrong file is worse than none.
+  const canOpen = Boolean(DATA.root);
+  const editorUrl = (path, line) =>
+    encodeURI(`vscode://file/${DATA.root}/${path}`) + (line ? ":" + line : "");
+
+  function mutualPairs() {
+    const byPair = new Map(links.map((l) => [l.source.key + PAIR + l.target.key, l]));
+    const pairs = [];
+    for (const l of links) {
+      if (!l.mutual || l.source.key > l.target.key) continue;
+      const back = byPair.get(l.target.key + PAIR + l.source.key);
+      pairs.push({ a: l.source, b: l.target, weight: l.weight + (back ? back.weight : 0) });
+    }
+    return pairs.sort((x, y) => y.weight - x.weight);
+  }
+
+  /** What is worth knowing about a level before you have clicked anything in it. */
+  function overview() {
+    const pick = (n) => `data-node="${esc(n.key)}"`;
+    const rank = (list, by) => [...list].sort((a, b) => b[by] - a[by]).slice(0, 6);
+
+    const imported = rank(nodes.filter((n) => n.in > 0), "in");
+    const entries = rank(nodes.filter((n) => n.out > 0 && n.in === 0), "out");
+    const pairs = mutualPairs().slice(0, 6);
+
+    return (
+      `<h3>Most imported</h3>` +
+      list(imported.map((n) => [esc(n.label), n.in, pick(n)]), "nothing here is imported", "pick") +
+      `<h3>Entry points</h3>` +
+      list(entries.map((n) => [esc(n.label), n.out, pick(n)]), "everything here is imported", "pick") +
+      `<h3>Mutual dependencies</h3>` +
+      list(
+        pairs.map((p) => [`${esc(p.a.label)} ↔ ${esc(p.b.label)}`, p.weight, pick(p.a)]),
+        "none, nothing here imports both ways",
+        "pick"
+      )
+    );
+  }
+
+  function selectNode(node) {
+    state.selected = node ? node.key : null;
+
+    if (!node) {
+      panel.innerHTML = `
+        <h2>${esc(DATA.repo)}</h2>
+        <div class="sub">${nodes.length} nodes · ${links.length} edges at this level${hidden ? ` · ${hidden} smaller nodes hidden` : ""}</div>
+        ${overview()}
+        <details>
+          <summary>Shortcuts</summary>
+          <ul>
+            <li><span>click a node</span><span class="n">inspect it here</span></li>
+            <li><span>double click</span><span class="n">go inside it</span></li>
+            <li><span>Escape</span><span class="n">back up one level</span></li>
+            <li><span>drag</span><span class="n">move a node or pan</span></li>
+            <li><span>wheel</span><span class="n">zoom</span></li>
+          </ul>
+        </details>`;
+      draw();
+      return;
+    }
+
+    const { out, inbound } = neighbours(node);
+    const path = node.isFile ? DATA.files[node.files[0]][0] : null;
+
+    const action = node.isFile
+      ? canOpen
+        ? `<a class="tool" href="${editorUrl(path)}">Open in editor</a>`
+        : ""
+      : `<button class="tool" id="enter">Go inside</button>`;
+
+    const head = `
+      <h2>${esc(node.key)}</h2>
+      <div class="sub">${node.isFile ? "file" : node.files.length + " files"} · ${node.symbols} symbols${node.external ? " · outside the current scope" : ""}</div>
+      ${action}`;
+
+    const linkList = (pairs) =>
+      list(
+        pairs.slice(0, 8).map(([key, weight]) => [esc(key), weight, byKey.has(key) ? `data-node="${esc(key)}"` : ""]),
+        "nothing",
+        "pick"
+      );
+
+    const body = node.isFile
+      ? `<h3>Symbols</h3>${list(
+          DATA.symbols[node.files[0]].map(([name, kind, line]) => [
+            `${esc(name)} <span class="k">${esc(kind)}</span>`,
+            canOpen ? `<a href="${editorUrl(path, line)}">:${line}</a>` : ":" + line,
+          ]),
+          "no exported symbols"
+        )}<h3>Imports</h3>${linkList(out)}`
+      : `<h3>Imports out</h3>${linkList(out)}<h3>Imports in</h3>${linkList(inbound)}`;
+
+    panel.innerHTML = head + body;
+    draw();
+  }
+
+  /* ---------- chrome ---------- */
+  function renderCrumbs() {
+    const parts = state.scope ? state.scope.split("/") : [];
+    const items = [`<button data-scope="">${esc(DATA.repo)}</button>`];
+    let acc = "";
+    for (const part of parts) {
+      acc = acc ? acc + "/" + part : part;
+      items.push(`<span class="sep">/</span><button data-scope="${esc(acc)}">${esc(part)}</button>`);
+    }
+    crumbs.innerHTML = items.join("");
+  }
+
+  function renderLegend() {
+    const mutual = links.filter((l) => l.mutual).length / 2;
+    legend.innerHTML =
+      `${nodes.length} nodes · ${links.length} edges` +
+      (mutual ? ` · ${mutual} mutual` : "") +
+      (hidden ? ` · ${hidden} hidden` : "") +
+      (state.scope ? ` · inside ${esc(state.scope)}` : "");
+  }
+
+  function enter(key) {
+    state.scope = key;
+    buildLevel();
+    // Settle first, like the boot path does. Framing a level whose nodes are still flying
+    // apart boxes the seed ring instead of the graph and leaves half of it off-screen.
+    while (step());
+    fit();
+    draw();
+  }
+
+  panel.addEventListener("click", (e) => {
+    if (e.target.id === "enter" && state.selected) return enter(state.selected);
+    // Editor links are plain anchors and must not be swallowed by row selection.
+    if (e.target.closest("a")) return;
+
+    const jump = e.target.closest("[data-node]");
+    if (jump && byKey.has(jump.dataset.node)) return selectNode(byKey.get(jump.dataset.node));
+
+    const row = e.target.closest("[data-file]");
+    if (row) reveal(Number(row.dataset.file));
+  });
+
+  crumbs.addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if (btn) enter(btn.dataset.scope);
+  });
+
+  document.getElementById("fit").addEventListener("click", () => {
+    fit();
+    draw();
+  });
+
+  document.getElementById("q").addEventListener("input", (e) => {
+    state.query = e.target.value.trim().toLowerCase();
+    runQuery();
+    markHits();
+
+    // Dimming alone reads as "nothing happened" when the level is five areas wide and
+    // every one of them holds a match, so the camera goes to what is left lit.
+    const lit = nodes.filter(matches);
+    if (lit.length && lit.length < nodes.length) fit(lit);
+    else if (!state.query) fit();
+
+    if (state.query) renderResults();
+    else selectNode(state.selected ? byKey.get(state.selected) : null);
+    draw();
+  });
+
+  /** Opens the directory a matched file lives in and selects the file itself. */
+  function reveal(index) {
+    const path = DATA.files[index][0];
+    const dir = path.slice(0, path.lastIndexOf("/"));
+    if (state.scope !== dir) enter(dir);
+    // A file at the repository root has no directory to open, so land on its area.
+    const node = byKey.get(path) ?? byKey.get(DATA.files[index][1]);
+    if (node) selectNode(node);
+  }
+
+  function renderResults() {
+    const rows = hits
+      .slice(0, 40)
+      .map(([i, symbol]) => {
+        const path = DATA.files[i][0];
+        const where = symbol ? `<span class="k">${esc(symbol)}</span>` : "";
+        return `<li data-file="${i}"><span class="hitrow">${esc(path)} ${where}</span></li>`;
+      });
+
+    panel.innerHTML =
+      `<h2>${esc(state.query)}</h2>
+       <div class="sub">${hits.length} file${hits.length === 1 ? "" : "s"} match by path or symbol${
+         hits.length > 40 ? " · first 40 listed" : ""
+       }</div>` +
+      (hits.length
+        ? `<h3>Go to</h3><ul class="pick">${rows.join("")}</ul>`
+        : `<div class="empty">Nothing in this repository matches.</div>`);
+  }
+
+  canvas.addEventListener("mousedown", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+    const hit = nodeAt(sx, sy);
+    moved = false;
+    downAt = [sx, sy];
+    downHit = hit;
+    canvas.classList.add("dragging");
+    if (hit) dragging = hit;
+    else panning = { x: sx - view.x, y: sy - view.y };
+  });
+
+  canvas.addEventListener("mousemove", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+
+    // A few pixels of hand tremor between press and release is still a click.
+    if (downAt && Math.hypot(sx - downAt[0], sy - downAt[1]) > 3) moved = true;
+
+    if (dragging) {
+      dragging.x = (sx - view.x) / view.k;
+      dragging.y = (sy - view.y) / view.k;
+      dragging.vx = 0;
+      dragging.vy = 0;
+      // Where you put an orphan is where it stays; the shelf must not drag it back.
+      dragging.pinned = true;
+      kick();
+      return;
+    }
+
+    if (panning) {
+      view.x = sx - panning.x;
+      view.y = sy - panning.y;
+      draw();
+      return;
+    }
+
+    const hit = nodeAt(sx, sy);
+    if (hit !== hover) {
+      hover = hit;
+      draw();
+    }
+  });
+
+  // On the window, not the canvas: a drag that ends off the canvas still has to stop.
+  window.addEventListener("mouseup", () => {
+    canvas.classList.remove("dragging");
+    dragging = null;
+    panning = null;
+    downAt = null;
+  });
+
+  // Selection hangs off `click` rather than `mouseup`: it is the one event every
+  // browser and every driver agrees on, and it arrives after the drag has ended.
+  canvas.addEventListener("click", (e) => {
+    if (moved) {
+      moved = false;
+      return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    selectNode(nodeAt(e.clientX - rect.left, e.clientY - rect.top) ?? downHit);
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    if (hover) {
+      hover = null;
+      draw();
+    }
+  });
+
+  canvas.addEventListener("dblclick", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const hit = nodeAt(e.clientX - rect.left, e.clientY - rect.top) ?? downHit;
+    if (hit && !hit.isFile) enter(hit.key);
+  });
+
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+    const factor = Math.exp(-e.deltaY * 0.0015);
+    const k = Math.max(0.08, Math.min(4, view.k * factor));
+    view.x = sx - ((sx - view.x) / view.k) * k;
+    view.y = sy - ((sy - view.y) / view.k) * k;
+    view.k = k;
+    draw();
+  }, { passive: false });
+
+  window.addEventListener("resize", resize);
+  window.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !state.scope) return;
+    enter(state.scope.includes("/") ? state.scope.slice(0, state.scope.lastIndexOf("/")) : "");
+  });
+
+  buildLevel();
+  resize();
+  while (step());
+  fit();
+  draw();
+})();
+</script>
+</body>
+</html>
