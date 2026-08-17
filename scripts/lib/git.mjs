@@ -1,7 +1,12 @@
 import { execFileSync } from 'node:child_process'
 
 function git(cwd, args) {
-  return execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+  return execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
 }
 
 /** Map of repo-relative path to git blob sha for tracked files, plus untracked files marked `untracked`. */
