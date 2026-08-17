@@ -5,7 +5,13 @@ const TOP_LEVEL_AREAS = ['engine', 'supabase', 'scripts', 'src']
 /** The inventory file a node belongs to, chosen by what the node is. */
 export function bucketOf(node) {
   if (node.kind === 'route') return 'routes'
-  if (node.kind === 'table' || node.kind === 'type' || node.kind === 'interface' || node.kind === 'enum') {
+  if (
+    node.kind === 'table' ||
+    node.kind === 'type' ||
+    node.kind === 'interface' ||
+    node.kind === 'enum' ||
+    node.kind === 'class'
+  ) {
     return 'data'
   }
   if (/^use[A-Z]/.test(node.name)) return 'hooks'

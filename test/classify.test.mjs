@@ -15,6 +15,10 @@ test('types land in data', () => {
   assert.equal(bucketOf(n({ kind: 'enum', name: 'Status' })), 'data')
 })
 
+test('classes land in data', () => {
+  assert.equal(bucketOf(n({ kind: 'class', name: 'HealthResponse' })), 'data')
+})
+
 test('use-prefixed names are hooks', () => {
   assert.equal(bucketOf(n({ name: 'useInvoice', path: 'src/hooks/useInvoice.ts' })), 'hooks')
   assert.equal(bucketOf(n({ name: 'user', path: 'src/user.ts' })), 'utils')

@@ -30,6 +30,24 @@ test('extracts exported symbols from TypeScript', () => {
   assert.ok(!('privateThing' in byName))
 })
 
+test('reads the first content line of a multi-line JSDoc block', () => {
+  const src = [
+    '/**',
+    ' * Formats cents into a BRL string.',
+    ' * Rounds to the nearest cent first.',
+    ' */',
+    'export function formatCurrency() {}',
+  ].join('\n')
+  const [node] = extractFile('src/currency.ts', src)
+  assert.equal(node.purpose, 'Formats cents into a BRL string.')
+})
+
+test('a multi-line JSDoc block with no content yields an empty purpose', () => {
+  const src = ['/**', ' *', ' */', 'export function noop() {}'].join('\n')
+  const [node] = extractFile('src/noop.ts', src)
+  assert.equal(node.purpose, '')
+})
+
 test('reads a line comment as purpose', () => {
   const src = ['// Rounds up to the next cent.', 'export function roundCents(v: number) {}'].join('\n')
   const [node] = extractFile('src/round.ts', src)
@@ -41,6 +59,14 @@ test('extracts exported names from Python', () => {
   const nodes = extractFile('engine/engine.py', src)
   assert.deepEqual(nodes.map((n) => n.name), ['allocate'])
   assert.equal(nodes[0].kind, 'function')
+})
+
+test('Python class and def get distinct kinds', () => {
+  const src = ['class Foo:', '    pass', '', 'def bar():', '    pass'].join('\n')
+  const nodes = extractFile('engine/models.py', src)
+  const byName = Object.fromEntries(nodes.map((n) => [n.name, n]))
+  assert.equal(byName.Foo.kind, 'class')
+  assert.equal(byName.bar.kind, 'function')
 })
 
 test('extracts a Next App Router route from its path', () => {

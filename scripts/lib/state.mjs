@@ -14,10 +14,19 @@ export function readState(atlasDir) {
   }
 }
 
-/** Writes state to atlasDir, creating the directory if it does not exist. */
+function sortKeys(obj) {
+  return Object.fromEntries(Object.keys(obj).sort().map((k) => [k, obj[k]]))
+}
+
+/**
+ * Writes state to atlasDir, creating the directory if it does not exist. Keys of
+ * `files` and `nodesByFile` are sorted so a single re-extracted file produces a
+ * minimal diff instead of migrating to the end of the object.
+ */
 export function writeState(atlasDir, state) {
   mkdirSync(atlasDir, { recursive: true })
-  writeFileSync(join(atlasDir, STATE_FILE), JSON.stringify(state, null, 2) + '\n')
+  const sorted = { ...state, files: sortKeys(state.files), nodesByFile: sortKeys(state.nodesByFile) }
+  writeFileSync(join(atlasDir, STATE_FILE), JSON.stringify(sorted, null, 2) + '\n')
 }
 
 /**

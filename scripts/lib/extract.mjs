@@ -1,13 +1,35 @@
 import { extname } from 'node:path'
 import { SYMBOL_RULES, TABLE_RULES, DECORATOR_ROUTE_RULES, nextRoutePath } from './rules.mjs'
 
+function stripCommentMarkers(line) {
+  return line.replace(/^\/?\*+/, '').replace(/\*+\/$/, '').trim()
+}
+
+/** Finds the first content line of a `/** ... *\/` block that closes at lines[closeIndex]. */
+function firstLineOfBlock(lines, closeIndex) {
+  let start = -1
+  for (let i = closeIndex - 1; i >= 0; i--) {
+    if (lines[i].trim().startsWith('/**')) {
+      start = i
+      break
+    }
+  }
+  if (start === -1) return ''
+  for (let i = start; i < closeIndex; i++) {
+    const content = stripCommentMarkers(lines[i].trim())
+    if (content) return content
+  }
+  return ''
+}
+
 /** Reads a JSDoc or line comment immediately above the declaration. */
 function purposeAbove(lines, index) {
   for (let i = index - 1; i >= 0 && i >= index - 6; i--) {
     const line = lines[i].trim()
     if (!line) return ''
-    if (line.startsWith('/**')) return line.replace(/^\/\*\*+/, '').replace(/\*+\/$/, '').trim()
-    if (line.startsWith('*')) return line.replace(/^\*+/, '').replace(/\*+\/$/, '').trim()
+    if (line === '*/') return firstLineOfBlock(lines, i)
+    if (line.startsWith('/**')) return stripCommentMarkers(line)
+    if (line.startsWith('*')) return stripCommentMarkers(line)
     if (line.startsWith('//')) return line.replace(/^\/+/, '').trim()
     if (line.startsWith('#')) return line.replace(/^#+/, '').trim()
     return ''

@@ -9,9 +9,9 @@ export const SYMBOL_RULES = [
   },
   {
     exts: ['.py'],
-    re: /^(?:def|class)\s+([A-Za-z][\w]*)/,
-    kind: () => 'function',
-    name: (m) => m[1],
+    re: /^(def|class)\s+([A-Za-z][\w]*)/,
+    kind: (m) => (m[1] === 'class' ? 'class' : 'function'),
+    name: (m) => m[2],
   },
 ]
 

@@ -28,6 +28,12 @@ every other pattern and decision untouched.
 If a cited path no longer exists, remove that citation. If a file ends up citing
 nothing, delete it.
 
+For changed paths that belong to an area with no existing pattern or decision
+covering it, evaluate whether one should be written. Follow the same
+anti-fabrication rules `/atlas-init` states: never write a pattern without two
+real supporting files, never write a decision without a source document, and
+verify every cited path actually exists before citing it.
+
 ## Step 3: Report
 
 State how many files were re-extracted and which patterns or decisions changed.

@@ -1,6 +1,7 @@
 {
   "name": "atlas",
   "owner": { "name": "carlovsk1" },
+  "description": "Marketplace distributing the Atlas plugin, a repository context graph for Claude Code",
   "plugins": [
     {
       "name": "atlas",

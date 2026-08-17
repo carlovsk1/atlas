@@ -64,22 +64,16 @@ Validated against a 433 tracked-file clone of a real production repository
 pointed at the exact declaration named. The run also surfaced patterns a
 five-file fixture cannot:
 
-- Python `class` declarations are always extracted with kind `function`, so they
-  never land in the `data` bucket and are indistinguishable from plain functions
-  in `utils.md`. In the validation run, 256 of 1,140 top-level Python `def`/
-  `class` declarations were classes (22%), all carrying the wrong kind.
-- The purpose extractor only reads the single line directly above a
-  declaration. A multi-line `/** ... */` block that closes on its own `*/` line
-  is misread: the closing line itself is captured and mangled into a bare `/`
-  instead of the real description, or instead of being left blank. In the
-  validation run, 41 of the 82 non-blank purposes were this bogus `/`, and
-  another 6 were stray comment dividers (`// ---...`) rather than descriptions.
-- Files under `tests/` or matching `test_*.py` / `*.test.ts` are not excluded
-  from indexing. In the validation run, 285 of 1,568 entries (18%) came from
-  test fixtures and test classes, mixed into `utils.md` indistinguishably from
-  production helpers.
+- FastAPI routes lose their router prefix. A file declaring
+  `APIRouter(prefix="/admin")` yields a `GET /stats` entry when the real URL is
+  `GET /admin/stats`. In the validation run, 25% of route entries were missing
+  their prefix this way.
+- Exported classes are listed in `data.md` rather than `utils.md`, because the
+  `data` bucket holds type definitions and a class is treated as one. A service
+  implemented as a class appears there too, not alongside the functions it is
+  used with.
 - Purpose text is rare in practice: only about 35 of 1,568 entries (2%) carried
-  a genuinely useful description once the two issues above are excluded. Treat
+  a genuinely useful description once malformed extraction was excluded. Treat
   `path:line` and the name as the reliable part of an entry; treat purpose as a
   bonus, not something to depend on.
 

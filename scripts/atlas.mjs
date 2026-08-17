@@ -8,13 +8,18 @@ import { readState, writeState, planWork, STATE_VERSION } from './lib/state.mjs'
 import { renderInventory, renderIndex, buildGraph } from './lib/render.mjs'
 
 const INDEXABLE = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.py', '.sql', '.prisma'])
-const SKIP = /(^|\/)(node_modules|dist|build|\.next|\.claude|coverage)(\/|$)/
+const SKIP = /(^|\/)(node_modules|dist|build|\.next|\.claude|coverage|test|tests|__tests__)(\/|$)|\.(test|spec)\.[^/]+$/
 
 function parseArgs(argv) {
   const args = { repo: process.cwd(), update: false }
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === '--repo') args.repo = argv[++i]
-    else if (argv[i] === '--update') args.update = true
+    if (argv[i] === '--repo') {
+      args.repo = argv[++i]
+      if (args.repo === undefined) {
+        console.error('atlas: --repo requires a path')
+        process.exit(1)
+      }
+    } else if (argv[i] === '--update') args.update = true
   }
   return args
 }
@@ -27,7 +32,7 @@ function loadConfig(repo) {
   }
 }
 
-function indexable(path) {
+export function indexable(path) {
   return INDEXABLE.has(extname(path)) && !SKIP.test(path)
 }
 
@@ -108,4 +113,4 @@ function main() {
   )
 }
 
-main()
+if (import.meta.url === `file://${process.argv[1]}`) main()

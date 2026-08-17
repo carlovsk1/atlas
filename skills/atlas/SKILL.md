@@ -26,7 +26,13 @@ hallucination.
 
    ```bash
    git diff --name-only <commit>..HEAD | wc -l
+   git status --porcelain
    ```
+
+   The diff alone misses uncommitted work: a developer mid-change with no new
+   commits shows zero divergence there even though the working tree has already
+   drifted from the index. Any output from `git status --porcelain` counts
+   toward divergence just like the diff does.
 
    Zero to a handful: trust the index. Dozens: treat every entry as a hint and
    confirm in the code. Missing `.state.json`: there is no index, say so and
