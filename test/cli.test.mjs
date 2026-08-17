@@ -88,3 +88,21 @@ test('update drops a deleted file from the inventory', () => {
   const hooks = readFileSync(join(dir, '.claude', 'atlas', 'inventory', 'hooks.md'), 'utf8')
   assert.ok(!hooks.includes('useInvoice'))
 })
+
+test('indexes a repository that has no commits yet', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'atlas-cli-'))
+  cpSync(join(here, 'fixtures', 'sample-repo'), dir, { recursive: true })
+  const git = (...args) => run('git', args, { cwd: dir })
+  git('init', '-q')
+  git('config', 'user.email', 'test@example.com')
+  git('config', 'user.name', 'Test')
+
+  atlas(dir)
+
+  const index = readFileSync(join(dir, '.claude', 'atlas', 'INDEX.md'), 'utf8')
+  assert.match(index, /Indexed at `uncommitted`/)
+  const state = JSON.parse(readFileSync(join(dir, '.claude', 'atlas', '.state.json'), 'utf8'))
+  assert.equal(state.commit, null)
+  const components = readFileSync(join(dir, '.claude', 'atlas', 'inventory', 'components.md'), 'utf8')
+  assert.match(components, /`InvoiceCard`/)
+})
