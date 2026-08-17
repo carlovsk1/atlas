@@ -30,7 +30,9 @@ hallucination.
 
    Zero to a handful: trust the index. Dozens: treat every entry as a hint and
    confirm in the code. Missing `.state.json`: there is no index, say so and
-   suggest `/atlas-init`.
+   suggest `/atlas-init`. `commit` is `null`: the repository had no commits when
+   it was indexed, so there is no baseline to diff against. Skip the diff, treat
+   the index as unverifiable rather than stale, and say so before relying on it.
 
 2. **Read `.claude/atlas/INDEX.md`.** It is the hub. Do not read every inventory
    file.

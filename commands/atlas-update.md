@@ -12,7 +12,10 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/atlas.mjs" --repo . --update
 
 ## Step 2: Re-synthesize only affected areas
 
-Read `.claude/atlas/.state.json` and take its `commit` field. List what changed:
+Read `.claude/atlas/.state.json` and take its `commit` field. If `commit` is
+`null`, the repository had no commits when it was indexed: there is no baseline
+to diff against, so skip this step and treat the index as unverifiable rather
+than stale. Otherwise list what changed:
 
 ```bash
 git diff --name-only <commit>..HEAD

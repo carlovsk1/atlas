@@ -23,7 +23,7 @@ export function renderInventory(bucket, nodes, config = {}) {
   const lines = [`# ${TITLES[bucket] ?? bucket}`, '']
 
   if (nodes.length === 0) {
-    lines.push('No entries found. Run `/atlas update` after adding code here.', '')
+    lines.push('No entries found. Run `/atlas-update` after adding code here.', '')
     return lines.join('\n')
   }
 
