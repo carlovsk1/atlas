@@ -19,6 +19,7 @@ In any repository:
 /atlas-init      # first full index
 /atlas-update    # refresh what changed
 /atlas-graph     # build and open the import graph
+/atlas-report    # what Atlas has actually done here
 ```
 
 The `atlas` skill then fires on its own whenever you ask for a new component,
@@ -59,9 +60,24 @@ silent on failure: Atlas must never be the reason an edit did not happen.
 
 | Hook | When | What it does |
 |---|---|---|
-| `UserPromptSubmit` | every prompt | States that an index exists and the three commands that query it, about 130 tokens |
+| `UserPromptSubmit` | every prompt | States that an index exists and the three commands that query it, about 130 tokens, and answers `--find` and `--rdeps` up front for whatever the prompt named |
 | `PreToolUse` on `Write` | new code file | Extracts the names the file would export and denies the write if the repository already exports one, with the locations |
 | `PostToolUse` on edits | after every edit | Re-indexes incrementally, about 0.1s, so the index never goes stale mid-session |
+
+The prompt hook only searches when the prompt names something searchable: a camelCase
+or PascalCase identifier, a backticked name, or a repository-relative path. A sentence
+in plain prose never loads the graph and costs exactly what it did before. A name it
+finds arrives with its locations, and a name it does not find is reported as free, so
+either answer saves the `--find` call:
+
+```
+Atlas already looked up what your message names:
+formatCurrency: 1 match
+  packages/utils/src/currency.ts:2  function
+parseShippingLabel: nothing in the index exports this
+packages/utils/src/currency.ts is imported by 1 file
+  apps/web/lib/invoice-total.ts
+```
 
 The gate is the interesting one, because it does not tell the model to go and check.
 The check has already run and its result is the denial:
@@ -80,6 +96,37 @@ It fires once per file per session, so a deliberate second write goes through. I
 only reads names of four characters or more, because `id` and `db` collide by
 accident and a warning nobody can act on is worse than no warning.
 
+## Whether any of this is helping
+
+Every hook appends a line to `.claude/atlas/.ledger.jsonl` when it had something to
+say, and `--report` reads it back:
+
+```
+$ node "$atlas" --repo . --report
+
+1 day · 3 sessions
+
+duplicates prevented    1   gate denied a Write
+context delivered       3   a name asked for already existed
+blast radius shown      1   dependents before an edit
+
+most re-invented
+  formatCurrency    3x   packages/utils/src/currency.ts:2
+
+repo duplication  0 names exported from 2+ files
+```
+
+Read it for what it is. Each count is an event that happened, not an outcome:
+`duplicates prevented` means a write was denied because the name already existed. What
+would have happened without Atlas is not observable, and a number claiming otherwise
+would be invented. A query that found nothing is not recorded, because learning that a
+name is free is worth a call and not a trophy.
+
+`repo duplication` is the exception, and the number to actually watch. It is recounted
+from `graph.json` on every run rather than taken from the ledger, so it does not depend
+on Atlas reporting on itself, and it only falls when duplication the tool pointed at
+gets consolidated for real.
+
 ## What it writes
 
 Everything lands in `.claude/atlas/`. Commit the Markdown, which is what a human
@@ -88,6 +135,7 @@ every edit and which rebuild in under a second:
 
 ```gitignore
 .claude/atlas/.state.json
+.claude/atlas/.ledger.jsonl
 .claude/atlas/graph.json
 .claude/atlas/graph.html
 ```
@@ -104,6 +152,7 @@ rather trade a noisy diff for a working index on clone.
 | `patterns/*.md` | Recurring conventions with canonical examples |
 | `decisions/*.md` | Recorded decisions, sourced from your ADRs, docs, and commit history |
 | `.state.json` | Per-file hashes and raw import specifiers, for incremental runs |
+| `.ledger.jsonl` | One line per assist, appended by the hooks, read by `--report` |
 | `graph.json` | Areas, files, symbols, and the import edges between files |
 | `graph.html` | Self-contained viewer, written only by `/atlas-graph` |
 

@@ -7,12 +7,11 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join, relative, isAbsolute, extname } from 'node:path'
 import { extractFile } from '../scripts/lib/extract.mjs'
 import { loadGraph, findSymbol } from '../scripts/lib/query.mjs'
+import { record } from '../scripts/lib/ledger.mjs'
+import { collidable } from '../scripts/lib/rules.mjs'
 
 process.on('uncaughtException', () => process.exit(0))
 
-// Short names collide by accident: `id`, `db`, `type`. A collision only carries a
-// warning when the name is specific enough to have been chosen.
-const MIN_NAME = 4
 const REPORTED = 3
 const CODE = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs'])
 
@@ -52,7 +51,7 @@ if (existsSync(marker)) allow()
 
 const collisions = []
 for (const node of extractFile(path, content)) {
-  if (node.name.length < MIN_NAME || node.kind === 'route') continue
+  if (!collidable(node)) continue
   const existing = findSymbol(graph, node.name).filter((m) => m.name === node.name && m.path !== path)
   if (existing.length) collisions.push({ name: node.name, existing })
 }
@@ -65,6 +64,16 @@ try {
 } catch {
   // An unwritable index directory is not a reason to block someone's work.
   allow()
+}
+
+for (const { name, existing } of collisions) {
+  record(atlasDir, {
+    kind: 'gate',
+    session: hook.session_id,
+    name,
+    at: `${existing[0].path}:${existing[0].line}`,
+    file: path,
+  })
 }
 
 const lines = [`Atlas: this repository already exports ${collisions.length === 1 ? 'this name' : 'these names'}.`]

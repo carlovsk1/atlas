@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { cpSync, mkdtempSync, writeFileSync, existsSync } from 'node:fs'
+import { cpSync, mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -35,6 +35,32 @@ test('the context hook states the index and how to ask it', () => {
   assert.match(out, /Indexed at/)
   assert.match(out, /--find/)
   assert.match(out, /--rdeps/)
+})
+
+test('the context hook answers --find for a name the prompt mentions', () => {
+  const dir = stageIndexed()
+  const out = run(CONTEXT, { cwd: dir, prompt: 'add a formatCurrency helper to the web app' })
+  assert.match(out, /formatCurrency: 1 match/)
+  assert.match(out, /packages\/utils\/src\/currency\.ts:2/)
+})
+
+test('the context hook says a name is free rather than staying quiet about it', () => {
+  const dir = stageIndexed()
+  const out = run(CONTEXT, { cwd: dir, prompt: 'write a parseShippingLabel util' })
+  assert.match(out, /parseShippingLabel: nothing in the index exports this/)
+})
+
+test('the context hook answers --rdeps for a path the prompt mentions', () => {
+  const dir = stageIndexed()
+  const out = run(CONTEXT, { cwd: dir, prompt: 'change packages/utils/src/currency.ts to take cents' })
+  assert.match(out, /packages\/utils\/src\/currency\.ts is imported by/)
+})
+
+test('a prompt that names nothing costs what it did before', () => {
+  const dir = stageIndexed()
+  const out = run(CONTEXT, { cwd: dir, prompt: 'what did we decide about taxes last week?' })
+  assert.match(out, /Atlas index available/)
+  assert.doesNotMatch(out, /already looked up/)
 })
 
 test('the context hook says nothing when the repository has no index', () => {
@@ -74,6 +100,26 @@ test('the gate lets the same write through on a second attempt', () => {
 
   assert.match(run(GATE, payload), /deny/)
   assert.equal(run(GATE, payload), '', 'a deliberate retry must not hit a wall')
+})
+
+test('the gate does not fight the framework a repository is written in', () => {
+  const dir = stageIndexed()
+  const route = join(dir, 'apps/web/app/api/invoices/route.ts')
+  mkdirSync(dirname(route), { recursive: true })
+  writeFileSync(route, 'export async function POST() {}\nexport const metadata = { title: "x" }\n')
+  execFileSync('node', [CLI, '--repo', dir], { encoding: 'utf8' })
+
+  const out = run(GATE, {
+    cwd: dir,
+    session_id: 's1',
+    tool_name: 'Write',
+    tool_input: {
+      file_path: join(dir, 'apps/web/app/api/refunds/route.ts'),
+      content: 'export async function POST() {}\nexport const metadata = { title: "y" }\n',
+    },
+  })
+
+  assert.equal(out, '', 'every Next route handler exports POST; that is not a collision')
 })
 
 test('the gate stays out of the way for a genuinely new name', () => {

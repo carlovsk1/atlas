@@ -46,6 +46,40 @@ export const DECORATOR_ROUTE_RULES = [
   },
 ]
 
+// Short names collide by accident: `id`, `db`, `type`. A collision is only worth a
+// word when the name was specific enough to have been chosen.
+const MIN_COLLISION_NAME = 4
+
+/**
+ * Names a framework makes you repeat. A file exporting `POST` is obeying the Next App
+ * Router, not re-inventing the `POST` in the route next door, and every `page.tsx` in a
+ * Next application exports `metadata`. Counting those as duplication would flag the
+ * most ordinary file in the repository.
+ */
+export const CONVENTIONAL_NAMES = new Set([
+  // Next App Router route handlers and file-level exports
+  'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS',
+  'metadata', 'generateMetadata', 'generateStaticParams', 'generateViewport', 'viewport',
+  'revalidate', 'dynamic', 'dynamicParams', 'runtime', 'fetchCache', 'preferredRegion', 'maxDuration',
+  // Next Pages Router
+  'getServerSideProps', 'getStaticProps', 'getStaticPaths', 'middleware', 'config',
+  // Serverless entry points
+  'handler',
+])
+
+/**
+ * Whether two symbols sharing this name is a real collision. The single definition of
+ * what Atlas treats as duplication: the gate refuses to warn about anything this
+ * rejects, and `--report` refuses to count it.
+ */
+export function collidable(node) {
+  return (
+    node.kind !== 'route' &&
+    node.name.length >= MIN_COLLISION_NAME &&
+    !CONVENTIONAL_NAMES.has(node.name)
+  )
+}
+
 /**
  * Derives a Next App Router path from a file path, or null when the file is not
  * a route. Anchors on the rightmost `app` segment so a package directory that is

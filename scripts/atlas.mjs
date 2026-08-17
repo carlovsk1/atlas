@@ -11,6 +11,7 @@ import { renderInventory, renderIndex, buildGraph } from './lib/render.mjs'
 import { buildViewerData, renderViewer } from './lib/viewer.mjs'
 import { loadGraph, findSymbol, dependencies, dependents, formatSymbols, formatWalk } from './lib/query.mjs'
 import { fileHistory, decisionCandidates } from './lib/history.mjs'
+import { record, readLedger, duplicateNames } from './lib/ledger.mjs'
 
 const INDEXABLE = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.py', '.sql', '.prisma'])
 // Import edges are a JavaScript and TypeScript idea. Python and SQL files are indexed
@@ -19,8 +20,9 @@ const IMPORTABLE = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs'])
 const SKIP = /(^|\/)(node_modules|dist|build|\.next|\.claude|coverage|test|tests|__tests__)(\/|$)|\.(test|spec)\.[^/]+$/
 
 // Modes that read the index instead of building it. Each takes a value except
-// --impact, which reads the working tree.
-const QUERIES = new Set(['--find', '--deps', '--rdeps', '--history', '--impact', '--candidates'])
+// --impact, --candidates, and --report, which take none.
+const QUERIES = new Set(['--find', '--deps', '--rdeps', '--history', '--impact', '--candidates', '--report'])
+const VALUELESS = new Set(['--impact', '--candidates', '--report'])
 
 function parseArgs(argv) {
   const args = { repo: process.cwd(), update: false, graph: false, query: null, value: '', depth: 1 }
@@ -37,8 +39,7 @@ function parseArgs(argv) {
     else if (flag === '--depth') args.depth = Math.max(1, Number(argv[++i]) || 1)
     else if (QUERIES.has(flag)) {
       args.query = flag
-      const needsValue = flag !== '--impact' && flag !== '--candidates'
-      if (needsValue) {
+      if (!VALUELESS.has(flag)) {
         args.value = argv[++i] ?? ''
         if (!args.value) {
           console.error(`atlas: ${flag} requires a value`)
@@ -91,6 +92,68 @@ function formatImpact(repo, graph) {
   return lines.join('\n')
 }
 
+// What an assist is, in the order a reader cares about. `--impact` counts as a blast
+// radius like `--rdeps` does, because it is the same answer asked for the whole tree.
+const ASSISTS = [
+  ['gate', 'duplicates prevented', 'gate denied a Write'],
+  ['find', 'context delivered', 'a name asked for already existed'],
+  ['rdeps', 'blast radius shown', 'dependents before an edit'],
+]
+const REINVENTED = 5
+const MIN_REINVENTED = 2
+const DAY = 86_400_000
+
+/**
+ * What Atlas has actually done in this repository, from the ledger the hooks write, plus
+ * the one number that does not come from Atlas at all: how much duplication the
+ * repository carries right now. Every line here is an event that happened. Nothing here
+ * claims what would have happened without the plugin, because nothing can.
+ */
+function formatReport(events, graph) {
+  const duplication = `repo duplication  ${duplicateNames(graph)} names exported from 2+ files`
+  if (events.length === 0) return ['atlas: no assists recorded yet', '', duplication].join('\n')
+
+  const stamps = events.map((e) => Date.parse(e.ts)).filter(Number.isFinite)
+  const span = stamps.length ? Math.max(1, Math.ceil((Math.max(...stamps) - Math.min(...stamps)) / DAY)) : 1
+  const sessions = new Set(events.map((e) => e.session).filter(Boolean)).size
+
+  const header = [`${span} ${span === 1 ? 'day' : 'days'}`]
+  if (sessions) header.push(`${sessions} ${sessions === 1 ? 'session' : 'sessions'}`)
+  const lines = [header.join(' · '), '']
+
+  const counts = new Map()
+  for (const event of events) {
+    const kind = event.kind === 'impact' ? 'rdeps' : event.kind
+    counts.set(kind, (counts.get(kind) ?? 0) + 1)
+  }
+  for (const [kind, label, hint] of ASSISTS) {
+    lines.push(`${label.padEnd(22)}${String(counts.get(kind) ?? 0).padStart(3)}   ${hint}`)
+  }
+
+  // A name asked for twice is a name someone was about to write twice.
+  const byName = new Map()
+  for (const event of events) {
+    if (event.kind !== 'gate' && event.kind !== 'find') continue
+    const seen = byName.get(event.name)
+    if (seen) seen.count++
+    else byName.set(event.name, { count: 1, at: event.at })
+  }
+  const repeated = [...byName]
+    .filter(([, v]) => v.count >= MIN_REINVENTED)
+    .sort((a, b) => b[1].count - a[1].count || (a[0] < b[0] ? -1 : 1))
+    .slice(0, REINVENTED)
+
+  if (repeated.length) {
+    lines.push('', 'most re-invented')
+    for (const [name, { count, at }] of repeated) {
+      lines.push(`  ${name.padEnd(18)}${count}x   ${at ?? ''}`.trimEnd())
+    }
+  }
+
+  lines.push('', duplication)
+  return lines.join('\n')
+}
+
 function formatCommits(commits, indent = '') {
   return commits.map((c) => `${indent}${c.sha.slice(0, 8)}  ${c.date.slice(0, 10)}  ${c.subject}`)
 }
@@ -117,18 +180,36 @@ function runQuery({ repo, query, value, depth }) {
     return
   }
 
+  const atlasDir = join(repo, '.claude', 'atlas')
   let graph
   try {
-    graph = loadGraph(join(repo, '.claude', 'atlas'))
+    graph = loadGraph(atlasDir)
   } catch (err) {
     console.error(err.message)
     process.exit(1)
   }
 
-  if (query === '--find') console.log(formatSymbols(findSymbol(graph, value)))
-  else if (query === '--deps') console.log(formatWalk(value, dependencies(graph, value, { depth }), 'dependencies'))
-  else if (query === '--rdeps') console.log(formatWalk(value, dependents(graph, value, { depth }), 'dependents'))
-  else if (query === '--impact') console.log(formatImpact(repo, graph))
+  // An answer only counts as an assist when it carried something: a query that found
+  // nothing cost a call and taught the caller that the name is free, which the ledger
+  // has no reason to celebrate.
+  if (query === '--find') {
+    const matches = findSymbol(graph, value)
+    console.log(formatSymbols(matches))
+    if (matches.total > 0) {
+      record(atlasDir, { kind: 'find', name: value, at: `${matches[0].path}:${matches[0].line}`, matches: matches.total })
+    }
+  } else if (query === '--deps') {
+    console.log(formatWalk(value, dependencies(graph, value, { depth }), 'dependencies'))
+  } else if (query === '--rdeps') {
+    const who = dependents(graph, value, { depth })
+    console.log(formatWalk(value, who, 'dependents'))
+    if (!who.unknown && who.length > 0) record(atlasDir, { kind: 'rdeps', path: value, count: who.length })
+  } else if (query === '--impact') {
+    console.log(formatImpact(repo, graph))
+    record(atlasDir, { kind: 'impact' })
+  } else if (query === '--report') {
+    console.log(formatReport(readLedger(atlasDir), graph))
+  }
 }
 
 function main() {

@@ -60,11 +60,19 @@ Every query reads the index and never rebuilds it, so running one is always safe
 
 ## What runs without you
 
-Three hooks back this skill up. Every prompt carries a line naming the index and its
-query commands. Writing a new code file whose exported names already exist in the
-repository is denied once, with those locations attached: that denial is the answer
-to step 1, so read it and reuse what it found rather than writing the same file
-again. After every edit the index re-indexes itself.
+Three hooks back this skill up.
+
+Every prompt carries a line naming the index, and when the message named something
+searchable, the search has already run: an `Atlas already looked up` block lists what
+those names matched, or reports that nothing exports them. That block is step 1
+answered before you started, so do not spend a `--find` re-asking it. It only covers
+what the message itself named, so a name you thought of afterwards is still yours to
+look up.
+
+Writing a new code file whose exported names already exist in the repository is
+denied once, with those locations attached: that denial is also the answer to step 1,
+so read it and reuse what it found rather than writing the same file again. After
+every edit the index re-indexes itself.
 
 ## Freshness
 
