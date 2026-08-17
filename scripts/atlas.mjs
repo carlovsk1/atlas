@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs'
 import { join, extname } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { listFiles, dirtyFiles, headSha } from './lib/git.mjs'
 import { extractFile } from './lib/extract.mjs'
 import { bucketOf, areaOf, BUCKETS } from './lib/classify.mjs'
@@ -113,4 +114,4 @@ function main() {
   )
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main()
+if (pathToFileURL(process.argv[1]).href === import.meta.url) main()
