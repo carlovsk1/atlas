@@ -99,14 +99,13 @@ test('inventory renders identically for two nodes sharing path and line, regardl
   assert.equal(md1, md2, 'output should be byte-identical regardless of input order')
 })
 
-test('buildGraph produces identical edges for two edges sharing to, regardless of input order', () => {
-  const sharedNodes = [
-    { id: 'symbol:first', kind: 'const', name: 'A', path: 'apps/web/a.ts', line: 1, purpose: '' },
-    { id: 'symbol:second', kind: 'const', name: 'B', path: 'apps/web/b.ts', line: 1, purpose: '' },
-  ]
-  const graph1 = buildGraph(sharedNodes)
-  const graph2 = buildGraph([...sharedNodes].reverse())
-  const edges1 = JSON.stringify(graph1.edges.map(e => [e.from, e.to, e.kind]))
-  const edges2 = JSON.stringify(graph2.edges.map(e => [e.from, e.to, e.kind]))
-  assert.equal(edges1, edges2, 'edges should be sorted identically regardless of input order')
+test('graph edges with a colliding `to` sort deterministically', () => {
+  const dupA = { id: 'symbol:dup', kind: 'function', name: 'dup', path: 'apps/web/a.ts', line: 1, purpose: '' }
+  const dupB = { id: 'symbol:dup', kind: 'function', name: 'dup', path: 'packages/utils/b.ts', line: 1, purpose: '' }
+  const forward = buildGraph([dupA, dupB])
+  const reverse = buildGraph([dupB, dupA])
+  assert.deepEqual(forward.edges, reverse.edges)
+  assert.equal(forward.edges.length, 2)
+  assert.equal(forward.edges[0].to, forward.edges[1].to)
+  assert.notEqual(forward.edges[0].from, forward.edges[1].from)
 })
