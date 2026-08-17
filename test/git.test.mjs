@@ -51,3 +51,29 @@ test('headSha returns the current commit', () => {
   const { dir } = makeRepo()
   assert.match(headSha(dir), /^[0-9a-f]{40}$/)
 })
+
+test('dirtyFiles handles staged renames correctly', () => {
+  const { dir } = makeRepo()
+  const run = (...args) => execFileSync('git', args, { cwd: dir })
+  run('mv', 'src/a.ts', 'src/renamed.ts')
+  run('add', '-A')
+  const dirty = dirtyFiles(dir)
+  assert.ok(dirty.has('src/renamed.ts'), 'should contain new path')
+  assert.ok(!dirty.has('src/a.ts'), 'should not contain old path')
+  // Verify no corrupted entries like "/a.ts" exist
+  for (const path of dirty) {
+    assert.ok(path.startsWith('src/'), `path should be under src/, got: ${path}`)
+  }
+})
+
+test('listFiles handles non-ASCII filenames correctly', () => {
+  const { dir } = makeRepo()
+  writeFileSync(join(dir, 'src', 'café.ts'), 'export const café = 3\n')
+  const run = (...args) => execFileSync('git', args, { cwd: dir })
+  run('add', '-A')
+  run('commit', '-q', '-m', 'add café')
+  const files = listFiles(dir)
+  assert.ok(files.has('src/café.ts'), 'should have unquoted key')
+  assert.ok(!files.has('src/"caf\\303\\251.ts"'), 'should not have quoted key')
+  assert.match(files.get('src/café.ts'), /^[0-9a-f]{40}$/)
+})

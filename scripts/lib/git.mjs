@@ -8,8 +8,8 @@ function git(cwd, args) {
 export function listFiles(cwd) {
   const files = new Map()
 
-  const tracked = git(cwd, ['ls-files', '-s'])
-  for (const line of tracked.split('\n')) {
+  const tracked = git(cwd, ['ls-files', '-s', '-z'])
+  for (const line of tracked.split('\0')) {
     if (!line) continue
     // Format: <mode> <sha> <stage>\t<path>
     const tab = line.indexOf('\t')
@@ -18,8 +18,8 @@ export function listFiles(cwd) {
     files.set(line.slice(tab + 1), sha)
   }
 
-  const untracked = git(cwd, ['ls-files', '--others', '--exclude-standard'])
-  for (const path of untracked.split('\n')) {
+  const untracked = git(cwd, ['ls-files', '--others', '--exclude-standard', '-z'])
+  for (const path of untracked.split('\0')) {
     if (path && !files.has(path)) files.set(path, 'untracked')
   }
 
@@ -30,9 +30,15 @@ export function listFiles(cwd) {
 export function dirtyFiles(cwd) {
   const out = git(cwd, ['status', '--porcelain', '-z', '--untracked-files=all'])
   const dirty = new Set()
-  for (const entry of out.split('\0')) {
+  const entries = out.split('\0')
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]
     if (entry.length < 4) continue
     dirty.add(entry.slice(3))
+    // Skip the old path for renames and copies (format: XY path\0oldpath\0)
+    if (entry[0] === 'R' || entry[0] === 'C') {
+      i++
+    }
   }
   return dirty
 }
