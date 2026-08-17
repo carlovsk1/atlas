@@ -9,7 +9,7 @@ import { bucketOf, areaOf, BUCKETS } from './lib/classify.mjs'
 import { readState, writeState, planWork, STATE_VERSION } from './lib/state.mjs'
 import { renderInventory, renderIndex, buildGraph } from './lib/render.mjs'
 import { buildViewerData, renderViewer } from './lib/viewer.mjs'
-import { loadGraph, findSymbol, dependencies, dependents, formatSymbols, formatWalk } from './lib/query.mjs'
+import { loadGraph, findSymbol, dependencies, dependents, unreached, formatSymbols, formatWalk, formatUnreached } from './lib/query.mjs'
 import { fileHistory, decisionCandidates } from './lib/history.mjs'
 import { record, readLedger, duplicateNames } from './lib/ledger.mjs'
 
@@ -21,11 +21,15 @@ const SKIP = /(^|\/)(node_modules|dist|build|\.next|\.claude|coverage|test|tests
 
 // Modes that read the index instead of building it. Each takes a value except
 // --impact, --candidates, and --report, which take none.
-const QUERIES = new Set(['--find', '--deps', '--rdeps', '--history', '--impact', '--candidates', '--report'])
+const QUERIES = new Set(['--find', '--deps', '--rdeps', '--without', '--history', '--impact', '--candidates', '--report'])
 const VALUELESS = new Set(['--impact', '--candidates', '--report'])
 
+// A page reaches a shared shell through the view component it renders, not directly, so
+// the adoption question is only honest a few hops out. `--depth` still overrides.
+const WITHOUT_DEPTH = 3
+
 function parseArgs(argv) {
-  const args = { repo: process.cwd(), update: false, graph: false, query: null, value: '', depth: 1 }
+  const args = { repo: process.cwd(), update: false, graph: false, query: null, value: '', depth: 1, depthSet: false, under: null }
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i]
     if (flag === '--repo') {
@@ -36,8 +40,11 @@ function parseArgs(argv) {
       }
     } else if (flag === '--update') args.update = true
     else if (flag === '--graph') args.graph = true
-    else if (flag === '--depth') args.depth = Math.max(1, Number(argv[++i]) || 1)
-    else if (QUERIES.has(flag)) {
+    else if (flag === '--under') args.under = argv[++i] ?? ''
+    else if (flag === '--depth') {
+      args.depth = Math.max(1, Number(argv[++i]) || 1)
+      args.depthSet = true
+    } else if (QUERIES.has(flag)) {
       args.query = flag
       if (!VALUELESS.has(flag)) {
         args.value = argv[++i] ?? ''
@@ -98,6 +105,7 @@ const ASSISTS = [
   ['gate', 'duplicates prevented', 'gate denied a Write'],
   ['find', 'context delivered', 'a name asked for already existed'],
   ['rdeps', 'blast radius shown', 'dependents before an edit'],
+  ['without', 'adoption gaps found', 'files that never reach a shared primitive'],
   ['search', 'searches answered', 'gate answered a Grep from the index'],
 ]
 const REINVENTED = 5
@@ -160,7 +168,7 @@ function formatCommits(commits, indent = '') {
 }
 
 /** Reads the index rather than building it. Every mode prints and returns. */
-function runQuery({ repo, query, value, depth }) {
+function runQuery({ repo, query, value, depth, depthSet, under }) {
   if (query === '--history') {
     const commits = fileHistory(repo, value)
     console.log(commits.length ? formatCommits(commits).join('\n') : `atlas: git knows no history for \`${value}\``)
@@ -205,6 +213,19 @@ function runQuery({ repo, query, value, depth }) {
     const who = dependents(graph, value, { depth })
     console.log(formatWalk(value, who, 'dependents'))
     if (!who.unknown && who.length > 0) record(atlasDir, { kind: 'rdeps', path: value, count: who.length })
+  } else if (query === '--without') {
+    // Unscoped, the answer is "every file in the repository minus a handful: thousands
+    // of lines that say nothing. Refusing is more useful than truncating to a cap.
+    if (!under) {
+      console.error('atlas: --without requires --under <path substring> to scope the answer, for example --under "(dashboard)"')
+      process.exit(1)
+    }
+    const hops = depthSet ? depth : WITHOUT_DEPTH
+    const gaps = unreached(graph, value, { under, depth: hops })
+    console.log(formatUnreached(value, gaps, under, hops))
+    if (!gaps.unknown && gaps.length > 0) {
+      record(atlasDir, { kind: 'without', path: value, under, count: gaps.length, scoped: gaps.scoped })
+    }
   } else if (query === '--impact') {
     console.log(formatImpact(repo, graph))
     record(atlasDir, { kind: 'impact' })

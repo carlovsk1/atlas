@@ -99,6 +99,9 @@ export function buildGraph(nodes, config = {}, files = [], imports = []) {
       path: node.path,
       line: node.line,
       area,
+      // Only a re-export carries these. Spread conditionally so every other node keeps
+      // the shape it had and graph.json does not grow a column of nulls.
+      ...(node.source ? { source: node.source, from: node.from } : {}),
     })
     edges.push({ from: areaId, to: node.id, kind: 'contains' })
   }

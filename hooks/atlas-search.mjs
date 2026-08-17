@@ -107,7 +107,9 @@ for (const hit of hits.slice(0, REPORTED)) lines.push(`  ${hit.path}:${hit.line}
 if (hits.length > REPORTED) lines.push(`  ... and ${hits.length - REPORTED} more`)
 lines.push(
   '',
-  `Open one of those, or ask who imports it: node "${CLI}" --repo . --rdeps <path>`,
+  'Open one of those, or ask the index the question the grep was for:',
+  `  node "${CLI}" --repo . --rdeps <path>                    who imports it`,
+  `  node "${CLI}" --repo . --without <path> --under <scope>  who does NOT`,
   'This fires once per name, so searching for it again runs the search.'
 )
 

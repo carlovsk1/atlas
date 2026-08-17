@@ -1,5 +1,5 @@
 import { extname } from 'node:path'
-import { SYMBOL_RULES, TABLE_RULES, DECORATOR_ROUTE_RULES, nextRoutePath } from './rules.mjs'
+import { SYMBOL_RULES, TABLE_RULES, DECORATOR_ROUTE_RULES, TS_EXTS, reexportsIn, nextRoutePath } from './rules.mjs'
 
 function stripCommentMarkers(line) {
   return line.replace(/^\/?\*+/, '').replace(/\*+\/$/, '').trim()
@@ -61,8 +61,16 @@ export function extractFile(path, content) {
   const routePath = nextRoutePath(path)
   if (routePath) push(node('route', routePath, path, 1, ''))
 
+  const isTs = TS_EXTS.includes(ext)
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
+
+    if (isTs) {
+      for (const { name, source, from } of reexportsIn(line)) {
+        push({ ...node('reexport', name, path, i + 1, ''), source, from })
+      }
+    }
 
     for (const rule of SYMBOL_RULES) {
       if (!applies(rule, ext)) continue

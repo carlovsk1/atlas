@@ -33,6 +33,30 @@ export const TABLE_RULES = [
   },
 ]
 
+// `export { A as B } from './x'` on one line. Deliberately line-based, like every other
+// rule here: a multi-line export block yields nothing rather than a wrong answer.
+const REEXPORT_RE = /^export\s+(?:type\s+)?\{([^}]+)\}\s*from\s*['"]([^'"]+)['"]/
+
+/**
+ * The names one re-export line republishes, each with the name it came from. A re-export
+ * is the one construct where a symbol answers to two names, which is exactly what a
+ * search for the original name has no other way of learning.
+ */
+export function reexportsIn(line) {
+  const m = line.match(REEXPORT_RE)
+  if (!m) return []
+
+  const out = []
+  for (const part of m[1].split(',')) {
+    // `export { type D }` puts the modifier inside the braces, where it would otherwise
+    // become part of the name and make the symbol unfindable by the name people type.
+    const [source, alias] = part.trim().replace(/^type\s+/, '').split(/\s+as\s+/)
+    if (!source) continue
+    out.push({ name: alias || source, source, from: m[2] })
+  }
+  return out
+}
+
 export const DECORATOR_ROUTE_RULES = [
   {
     exts: ['.py'],
@@ -75,6 +99,10 @@ export const CONVENTIONAL_NAMES = new Set([
 export function collidable(node) {
   return (
     node.kind !== 'route' &&
+    // A re-export is the opposite of duplication: it is one implementation answering to a
+    // second name on purpose. Counting it would make consolidating a fork raise the
+    // duplication number, which is backwards.
+    node.kind !== 'reexport' &&
     node.name.length >= MIN_COLLISION_NAME &&
     !CONVENTIONAL_NAMES.has(node.name)
   )

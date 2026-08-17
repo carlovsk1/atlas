@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { loadGraph, findSymbol, dependencies, dependents, formatSymbols, formatWalk } from '../scripts/lib/query.mjs'
+import { loadGraph, findSymbol, dependencies, dependents, unreached, formatSymbols, formatWalk, formatUnreached } from '../scripts/lib/query.mjs'
 
 const fileNode = (path, area = 'src') => ({
   id: `file:${path}`,
@@ -237,4 +237,170 @@ test('formatWalk states how many results it dropped', () => {
   assert.equal(lines[0], 'src/target.ts is imported by 23 files')
   assert.equal(lines.length, 22)
   assert.equal(lines.at(-1), '... 3 more omitted, cap 20')
+})
+
+const reexportNode = (name, source, path, line, area = 'src') => ({
+  id: `reexport:${path}#${name}`,
+  kind: 'reexport',
+  name,
+  source,
+  from: './somewhere',
+  path,
+  line,
+  area,
+})
+
+test('a search for the original name also finds the alias a re-export publishes', () => {
+  const graph = graphFrom({
+    nodes: [
+      symbolNode('PageScaffold', 'src/shared/page-scaffold.tsx', 40),
+      reexportNode('AdvisorPageScaffold', 'PageScaffold', 'src/advisor/page-scaffold.tsx', 5),
+    ],
+  })
+
+  const matches = findSymbol(graph, 'PageScaffold')
+  assert.deepEqual(matches.map((m) => m.name), ['PageScaffold', 'AdvisorPageScaffold'])
+  assert.equal(matches[1].source, 'PageScaffold')
+})
+
+test('the declaration outranks the alias, so the real implementation is line one', () => {
+  const graph = graphFrom({
+    nodes: [
+      reexportNode('AliasA', 'formatMoney', 'src/a.ts', 1),
+      symbolNode('formatMoney', 'src/z.ts', 99),
+    ],
+  })
+  assert.equal(findSymbol(graph, 'formatMoney')[0].path, 'src/z.ts')
+})
+
+test('formatSymbols names what a re-export re-exports', () => {
+  const graph = graphFrom({
+    nodes: [reexportNode('AdvisorPageScaffold', 'PageScaffold', 'src/advisor/page-scaffold.tsx', 5)],
+  })
+  assert.match(
+    formatSymbols(findSymbol(graph, 'AdvisorPageScaffold')),
+    /^AdvisorPageScaffold {2}reexport of PageScaffold {2}src\/advisor\/page-scaffold\.tsx:5/m
+  )
+})
+
+test('one name declared in two files is reported as a fork under the list', () => {
+  const graph = graphFrom({
+    nodes: [
+      symbolNode('PageHeader', 'src/advisor/page-header.tsx', 27),
+      symbolNode('PageHeader', 'src/shared/page-header.tsx', 41),
+      symbolNode('FormPageHeader', 'src/form/chrome.tsx', 60),
+    ],
+  })
+
+  const matches = findSymbol(graph, 'PageHeader')
+  assert.deepEqual(matches.forks, [
+    { name: 'PageHeader', paths: ['src/advisor/page-header.tsx', 'src/shared/page-header.tsx'] },
+  ])
+
+  const out = formatSymbols(matches)
+  assert.match(out, /PageHeader is declared in 2 files, likely a fork:/)
+  assert.match(out, /\n {2}src\/shared\/page-header\.tsx$/)
+})
+
+test('a re-export is never a fork: it is one implementation under a second name', () => {
+  const graph = graphFrom({
+    nodes: [
+      symbolNode('formatMoney', 'src/money.ts', 1),
+      reexportNode('formatMoney', 'formatMoney', 'src/index.ts', 2),
+    ],
+  })
+  assert.deepEqual(findSymbol(graph, 'formatMoney').forks, [])
+})
+
+test('forks are counted over every match, not only the ones that fit the cap', () => {
+  const filler = Array.from({ length: 25 }, (_, i) =>
+    symbolNode(`parseThing${String(i).padStart(2, '0')}`, `src/a${String(i).padStart(2, '0')}.ts`, 1)
+  )
+  const graph = graphFrom({
+    nodes: [...filler, symbolNode('parseThing', 'src/y.ts', 1), symbolNode('parseThing', 'src/z.ts', 1)],
+  })
+  assert.deepEqual(findSymbol(graph, 'parseThing').forks, [
+    { name: 'parseThing', paths: ['src/y.ts', 'src/z.ts'] },
+  ])
+})
+
+/** page -> view -> shell, plus a page that renders nothing shared. */
+function adoptionGraph() {
+  return graphFrom({
+    nodes: [
+      fileNode('src/shared/shell.tsx'),
+      fileNode('src/app/good/page.tsx'),
+      fileNode('src/app/good/view.tsx'),
+      fileNode('src/app/bad/page.tsx'),
+      fileNode('src/app/bad/table.tsx'),
+      fileNode('src/other/page.tsx'),
+      { id: 'route:src/app/good/page.tsx#/good', kind: 'route', name: '/good', path: 'src/app/good/page.tsx', line: 1, area: 'src' },
+      { id: 'route:src/app/bad/page.tsx#/bad', kind: 'route', name: '/bad', path: 'src/app/bad/page.tsx', line: 1, area: 'src' },
+    ],
+    edges: [
+      importEdge('src/app/good/page.tsx', 'src/app/good/view.tsx'),
+      importEdge('src/app/good/view.tsx', 'src/shared/shell.tsx'),
+      importEdge('src/app/bad/page.tsx', 'src/app/bad/table.tsx'),
+    ],
+  })
+}
+
+test('unreached names the files in scope that never reach the target', () => {
+  const gaps = unreached(adoptionGraph(), 'src/shared/shell.tsx', { under: 'src/app/' })
+  assert.deepEqual(gaps.map((g) => g.path), [
+    'src/app/bad/page.tsx',
+    'src/app/bad/table.tsx',
+  ])
+  assert.equal(gaps.scoped, 4)
+})
+
+test('unreached puts route files first, because the pages are the answer', () => {
+  const gaps = unreached(adoptionGraph(), 'src/shared/shell.tsx', { under: 'src/' })
+  assert.equal(gaps[0].path, 'src/app/bad/page.tsx')
+  assert.equal(gaps[0].route, '/bad')
+  assert.equal(gaps.at(-1).route, null)
+})
+
+test('depth 1 reports a page that reaches the target through a view as a gap', () => {
+  const gaps = unreached(adoptionGraph(), 'src/shared/shell.tsx', { under: 'src/app/', depth: 1 })
+  assert.ok(gaps.some((g) => g.path === 'src/app/good/page.tsx'))
+})
+
+test('the default depth follows the page through the view it renders', () => {
+  const gaps = unreached(adoptionGraph(), 'src/shared/shell.tsx', { under: 'src/app/good' })
+  assert.deepEqual(gaps.map((g) => g.path), [])
+  assert.equal(gaps.scoped, 2)
+})
+
+test('the scope never counts the target as a file that failed to reach itself', () => {
+  const gaps = unreached(adoptionGraph(), 'src/shared/shell.tsx', { under: 'src/shared' })
+  assert.equal(gaps.scoped, 0)
+  assert.equal(gaps.length, 0)
+})
+
+test('an unknown target is flagged rather than reported as total non-adoption', () => {
+  const gaps = unreached(adoptionGraph(), 'src/nope.tsx', { under: 'src/' })
+  assert.equal(gaps.unknown, true)
+  assert.match(formatUnreached('src/nope.tsx', gaps, 'src/', 3), /is not an indexed file/)
+})
+
+test('formatUnreached distinguishes full adoption from an empty scope', () => {
+  const graph = adoptionGraph()
+  assert.match(
+    formatUnreached('src/shared/shell.tsx', unreached(graph, 'src/shared/shell.tsx', { under: 'src/app/good' }), 'src/app/good', 3),
+    /^all 2 files under `src\/app\/good` reach .* within 3 hops$/
+  )
+  assert.match(
+    formatUnreached('src/shared/shell.tsx', unreached(graph, 'src/shared/shell.tsx', { under: 'nowhere' }), 'nowhere', 3),
+    /^atlas: no indexed file has a path containing `nowhere`$/
+  )
+})
+
+test('formatUnreached leads with the ratio and marks the routes', () => {
+  const gaps = unreached(adoptionGraph(), 'src/shared/shell.tsx', { under: 'src/app/' })
+  assert.deepEqual(formatUnreached('src/shared/shell.tsx', gaps, 'src/app/', 3).split('\n'), [
+    '2 of 4 files under `src/app/` never reach src/shared/shell.tsx within 3 hops, 1 of them routes',
+    'src/app/bad/page.tsx  route /bad',
+    'src/app/bad/table.tsx',
+  ])
 })

@@ -33,10 +33,15 @@ node "$ATLAS" --repo . --rdeps src/lib/money.ts     # who breaks if I change thi
 node "$ATLAS" --repo . --deps src/lib/money.ts      # what this file needs to work
 node "$ATLAS" --repo . --impact                     # blast radius of the working tree
 node "$ATLAS" --repo . --history src/lib/money.ts   # why this file looks like it does
+
+node "$ATLAS" --repo . --without src/shared/shell.tsx --under "(dashboard)"
+                                                    # who does NOT use it
 ```
 
 `--deps` and `--rdeps` take `--depth N` for transitive hops; depth 1 is direct only.
-Every query reads the index and never rebuilds it, so running one is always safe.
+`--without` defaults to 3 hops instead, because a page reaches a shell through the view
+it renders and depth 1 would report every compliant page as a violation. Every query
+reads the index and never rebuilds it, so running one is always safe.
 
 ## Steps
 
@@ -44,18 +49,29 @@ Every query reads the index and never rebuilds it, so running one is always safe
    and its near synonyms: `formatCurrency`, `formatMoney`, `currency`. Several hits
    in different areas is itself the finding, report it rather than adding one more.
 
-2. **Open the file before using what you found.** Read it at the listed `path:line`
+   Two lines in that answer are conclusions, not entries. `reexport of X` means the
+   symbol answers to a second name, so the alias and the original are one thing and
+   consolidating them is not a task. A `likely a fork` block means the opposite: one
+   primitive was copied, and any change to it has to be made twice. Say so.
+
+2. **When the question is adoption, ask the negative.** "Is this pattern used
+   everywhere" is `--without <primitive> --under <scope>`, never `--rdeps`; `--rdeps`
+   lists the files that already comply, which is the half that was never in doubt.
+   Read the route count in the header first, and treat the list as candidates to open,
+   not as a verdict. An unresolved or dynamic import reads as a gap.
+
+3. **Open the file before using what you found.** Read it at the listed `path:line`
    and work from the real signature. This is the one rule.
 
-3. **Before changing a file, `--rdeps` it.** Say the number out loud: "this is
+4. **Before changing a file, `--rdeps` it.** Say the number out loud: "this is
    imported by 208 files" changes how the change should be made. A file with many
    importers wants a widening change, not a breaking one.
 
-4. **When the question is why, read the decisions.** Check `.claude/atlas/decisions/`
+5. **When the question is why, read the decisions.** Check `.claude/atlas/decisions/`
    for the area, and `--history` on the file. If a decision covers what you are
    about to do, follow it or say explicitly why you are departing from it.
 
-5. **If nothing matches, say so** before writing new code: "Atlas has no existing X,
+6. **If nothing matches, say so** before writing new code: "Atlas has no existing X,
    creating a new one." That sentence is the evidence you actually looked.
 
 ## What runs without you

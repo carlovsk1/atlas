@@ -40,6 +40,9 @@ node "$atlas" --repo . --deps src/lib/money.ts      # what this file needs to wo
 node "$atlas" --repo . --impact                     # blast radius of the working tree
 node "$atlas" --repo . --history src/lib/money.ts   # why this file looks like it does
 node "$atlas" --repo . --candidates                 # files whose history hides a rule
+
+node "$atlas" --repo . --without src/shared/shell.tsx --under "(dashboard)"
+                                                    # who does NOT use it
 ```
 
 `--deps` and `--rdeps` accept `--depth N`. Queries read the index and never rebuild
@@ -51,6 +54,54 @@ formatCurrency  function  packages/shared/src/utils/format.ts:1            packa
 formatCurrency  function  packages/web/src/components/billing/format.ts:10 packages/web
 formatCurrency  const     packages/web/src/lib/format-total.ts:8           packages/web
 ```
+
+### The two names a symbol answers to
+
+A re-export is indexed under the name it publishes, carrying the name it came from, so
+one search finds both. Without it a search reports the declaration and stays silent
+about the alias every consumer actually imports:
+
+```
+2 matches
+PageScaffold         function                    src/components/shared/page-scaffold.tsx:40
+AdvisorPageScaffold  reexport of PageScaffold    src/app/(advisor)/_components/page-scaffold.tsx:5
+```
+
+A re-export never counts as duplication. It is one implementation deliberately answering
+to a second name, which is the opposite of the fork below.
+
+### Forks, called out rather than listed
+
+Two files declaring the same exported name is a copied primitive. In a flat list with a
+few substring hits between them, it is exactly what a reader skims past, so it is stated
+as a conclusion under the results:
+
+```
+PageHeader is declared in 2 files, likely a fork:
+  src/app/(advisor)/_components/page-header.tsx
+  src/components/shared/page-header.tsx
+```
+
+### Who does *not* use it
+
+`--rdeps` answers adoption from the wrong end: it names the files that already use the
+shared primitive, which is the half nobody was worried about. `--without` names the rest.
+
+```
+$ atlas --without src/components/shared/page-scaffold.tsx --under "(dashboard)"
+298 of 313 files under `(dashboard)` never reach …/page-scaffold.tsx within 3 hops, 48 of them routes
+src/app/(dashboard)/admin/api-keys/page.tsx      route /admin/api-keys
+src/app/(dashboard)/advisors/page.tsx            route /advisors
+```
+
+Two things make the answer usable rather than a wall of paths. It walks **3 hops by
+default**, because a page reaches a shell through the view it renders, not directly, and
+at depth 1 every compliant page reads as a violation. And **route files sort first**, with
+their own count in the header, because when the scope is a route group the pages are the
+answer and the components under them are context.
+
+`--under` is required. Unscoped, the answer is every file in the repository minus a
+handful, and refusing is more useful than truncating to a cap.
 
 ## Four hooks, so consulting the index is not a matter of remembering
 
@@ -212,7 +263,13 @@ Optional `atlas.config.json` at the repository root:
 
 Extraction is regex-based, not AST-based, so exotic re-exports and complex
 barrel files can be missed. This is deliberate: the consumer is a model that
-opens the file before using a symbol, not a compiler.
+opens the file before using a symbol, not a compiler. Concretely, a re-export is
+read only when its braces open and close on one line; a multi-line
+`export {\n  A,\n  B,\n} from './x'` yields nothing rather than a wrong answer.
+
+`--without` inherits the resolver's blind spots: a file that reaches the target
+through a specifier Atlas could not resolve, or through a dynamic `import()`,
+reports as a gap. It is a list to check, not a verdict.
 
 Validated against a 433 tracked-file clone of a production Python and TypeScript
 repository (467 indexable files). Five spot-checked `path:line` entries all
