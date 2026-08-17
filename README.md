@@ -67,8 +67,7 @@ five-file fixture cannot:
 - Python `class` declarations are always extracted with kind `function`, so they
   never land in the `data` bucket and are indistinguishable from plain functions
   in `utils.md`. In the validation run, 256 of 1,140 top-level Python `def`/
-  `class` declarations were classes (22%), so about one in five Python symbols
-  extracted carries the wrong kind.
+  `class` declarations were classes (22%), all carrying the wrong kind.
 - The purpose extractor only reads the single line directly above a
   declaration. A multi-line `/** ... */` block that closes on its own `*/` line
   is misread: the closing line itself is captured and mangled into a bare `/`
