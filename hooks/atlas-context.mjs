@@ -108,10 +108,12 @@ const prompt = typeof hook.prompt === 'string' ? hook.prompt : hook.user_prompt
 console.log(
   [
     `Atlas index available for this repository. ${stamp}`,
-    `Ask it instead of reading .claude/atlas/*.md, which is far larger than the answer:`,
+    `Ask it BEFORE grepping for where a symbol lives or who imports a file:`,
     `  node "${CLI}" --repo . --find <name>      does this already exist, and where`,
     `  node "${CLI}" --repo . --rdeps <path>     who breaks if I change this file`,
     `  node "${CLI}" --repo . --impact           blast radius of the working tree`,
+    `Grep stays right for content the index does not hold: a class name, a string, a regex.`,
+    `Never read .claude/atlas/*.md directly, it is far larger than any answer in it.`,
     ...(typeof prompt === 'string' ? lookup(join(repo, '.claude', 'atlas'), prompt, hook.session_id) : []),
   ].join('\n')
 )

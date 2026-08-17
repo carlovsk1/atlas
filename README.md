@@ -52,16 +52,17 @@ formatCurrency  function  packages/web/src/components/billing/format.ts:10 packa
 formatCurrency  const     packages/web/src/lib/format-total.ts:8           packages/web
 ```
 
-## Three hooks, so consulting the index is not a matter of remembering
+## Four hooks, so consulting the index is not a matter of remembering
 
 A skill fires when the model decides it applies. Hooks fire because the harness runs
-them. All three do nothing until you have run `/atlas-init` once, and all three are
+them. All four do nothing until you have run `/atlas-init` once, and all four are
 silent on failure: Atlas must never be the reason an edit did not happen.
 
 | Hook | When | What it does |
 |---|---|---|
 | `UserPromptSubmit` | every prompt | States that an index exists and the three commands that query it, about 130 tokens, and answers `--find` and `--rdeps` up front for whatever the prompt named |
 | `PreToolUse` on `Write` | new code file | Extracts the names the file would export and denies the write if the repository already exports one, with the locations |
+| `PreToolUse` on `Grep`/`Bash` | search for a bare name | Answers the search from the index and denies it, when the pattern is a plain identifier the graph knows |
 | `PostToolUse` on edits | after every edit | Re-indexes incrementally, about 0.1s, so the index never goes stale mid-session |
 
 The prompt hook only searches when the prompt names something searchable: a camelCase
@@ -95,6 +96,24 @@ formatCurrency:
 It fires once per file per session, so a deliberate second write goes through. It
 only reads names of four characters or more, because `id` and `db` collide by
 accident and a warning nobody can act on is worse than no warning.
+
+The search gate takes the same stance one step earlier. The prompt hook can only look
+up what your message named, and most names are found mid-task, in the code — so a
+`Grep` for `PageScaffold`, or the `grep -rl PageScaffold` that usually stands in for
+it, is answered from the graph instead of run:
+
+```
+Atlas: `PageScaffold` is indexed, so this search is already answered.
+
+  packages/web/src/components/shared/page-scaffold.tsx:40  function
+```
+
+It is deliberately narrow. The pattern has to be a plain identifier of four characters
+or more that the index holds an exact match for; a regex, a string literal, a file
+name, a path, or a name nothing exports all run untouched, because content is what
+grep is for and a gate people work around is worse than no gate. Like the write gate
+it fires once per name per session, so asking for the raw matches anyway costs one
+repeated search.
 
 ## Whether any of this is helping
 

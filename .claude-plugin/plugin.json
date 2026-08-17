@@ -1,6 +1,6 @@
 {
   "name": "atlas",
   "description": "Indexes a repository's exports, routes, tables, patterns, and decisions into a context graph the agent consults before writing new code",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": { "name": "Carlos Gonçalves" }
 }

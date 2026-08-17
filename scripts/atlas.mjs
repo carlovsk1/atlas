@@ -98,6 +98,7 @@ const ASSISTS = [
   ['gate', 'duplicates prevented', 'gate denied a Write'],
   ['find', 'context delivered', 'a name asked for already existed'],
   ['rdeps', 'blast radius shown', 'dependents before an edit'],
+  ['search', 'searches answered', 'gate answered a Grep from the index'],
 ]
 const REINVENTED = 5
 const MIN_REINVENTED = 2
