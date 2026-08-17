@@ -9,7 +9,9 @@ const TITLES = {
 }
 
 function byPathThenLine(a, b) {
-  return a.path === b.path ? a.line - b.line : a.path < b.path ? -1 : 1
+  if (a.path !== b.path) return a.path < b.path ? -1 : 1
+  if (a.line !== b.line) return a.line - b.line
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
 }
 
 function escapeCell(text) {
@@ -103,6 +105,6 @@ export function buildGraph(nodes, config = {}) {
 
   return {
     nodes: [...out.values()].sort((a, b) => (a.id < b.id ? -1 : 1)),
-    edges: edges.sort((a, b) => (a.to < b.to ? -1 : 1)),
+    edges: edges.sort((a, b) => (a.to < b.to ? -1 : a.to > b.to ? 1 : a.from < b.from ? -1 : a.from > b.from ? 1 : 0)),
   }
 }

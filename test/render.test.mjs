@@ -57,3 +57,56 @@ test('graph output is sorted by id', () => {
   const ids = buildGraph([...nodes].reverse()).nodes.map((n) => n.id)
   assert.deepEqual(ids, [...ids].sort())
 })
+
+test('inventory escapes pipe characters in purpose', () => {
+  const nodeWithPipe = { id: 'test:pipe', kind: 'const', name: 'PIPE', path: 'apps/web/a.ts', line: 1, purpose: 'Value is A | B' }
+  const md = renderInventory('utils', [nodeWithPipe])
+  assert.match(md, /\| `PIPE` \| const \| `apps\/web\/a\.ts:1` \| Value is A \\| B \|/)
+  assert.ok(md.includes('Value is A \\|'), 'pipe should be escaped as \\|')
+})
+
+test('inventory converts newlines in purpose to spaces', () => {
+  const nodeWithNewline = { id: 'test:newline', kind: 'const', name: 'MULTI', path: 'apps/web/b.ts', line: 2, purpose: 'Line 1\nLine 2' }
+  const md = renderInventory('utils', [nodeWithNewline])
+  assert.match(md, /\| `MULTI` \| const \| `apps\/web\/b\.ts:2` \| Line 1 Line 2 \|/)
+  const dataRows = md.split('\n').filter(l => l.startsWith('|') && !l.includes('---') && !l.includes('Symbol'))
+  for (const row of dataRows) {
+    assert.ok(!row.includes('\n'), 'no table row should contain a newline')
+  }
+})
+
+test('renderIndex with all-zero counts and empty arrays produces valid markdown', () => {
+  const md = renderIndex({
+    commit: 'abc123',
+    date: '2026-08-17',
+    counts: { components: 0, hooks: 0, routes: 0, data: 0, utils: 0 },
+    areas: [],
+    patterns: [],
+    decisions: [],
+  })
+  assert.match(md, /^# Atlas Index\n/)
+  assert.match(md, /Indexed at `abc123`/)
+  assert.ok(md.includes('No entries found') === false, 'should not reference inventory files')
+})
+
+test('inventory renders identically for two nodes sharing path and line, regardless of input order', () => {
+  const shared = [
+    { id: 'first-id', kind: 'const', name: 'A', path: 'apps/web/shared.ts', line: 5, purpose: 'First' },
+    { id: 'second-id', kind: 'const', name: 'B', path: 'apps/web/shared.ts', line: 5, purpose: 'Second' },
+  ]
+  const md1 = renderInventory('utils', shared)
+  const md2 = renderInventory('utils', [...shared].reverse())
+  assert.equal(md1, md2, 'output should be byte-identical regardless of input order')
+})
+
+test('buildGraph produces identical edges for two edges sharing to, regardless of input order', () => {
+  const sharedNodes = [
+    { id: 'symbol:first', kind: 'const', name: 'A', path: 'apps/web/a.ts', line: 1, purpose: '' },
+    { id: 'symbol:second', kind: 'const', name: 'B', path: 'apps/web/b.ts', line: 1, purpose: '' },
+  ]
+  const graph1 = buildGraph(sharedNodes)
+  const graph2 = buildGraph([...sharedNodes].reverse())
+  const edges1 = JSON.stringify(graph1.edges.map(e => [e.from, e.to, e.kind]))
+  const edges2 = JSON.stringify(graph2.edges.map(e => [e.from, e.to, e.kind]))
+  assert.equal(edges1, edges2, 'edges should be sorted identically regardless of input order')
+})
