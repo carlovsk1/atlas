@@ -1,0 +1,11 @@
+{
+  "name": "atlas",
+  "owner": { "name": "carlovsk1" },
+  "plugins": [
+    {
+      "name": "atlas",
+      "source": "./",
+      "description": "Repository context graph for Claude Code"
+    }
+  ]
+}
