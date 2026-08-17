@@ -74,3 +74,21 @@ test('extracts a Drizzle table declaration', () => {
   const nodes = extractFile('packages/db/schema.ts', src)
   assert.ok(nodes.some((n) => n.kind === 'table' && n.name === 'users'))
 })
+
+test('nextRoutePath anchors on rightmost app segment', () => {
+  const nodes = extractFile('apps/app/app/foo/page.tsx', 'export default function Page() {}')
+  const route = nodes.find((n) => n.kind === 'route')
+  assert.equal(route.name, '/foo')
+})
+
+test('comment does not leak past blank line to next declaration', () => {
+  const src = [
+    'export function A() {}',
+    '// TODO: revisit A someday',
+    '',
+    'export function B() {}',
+  ].join('\n')
+  const nodes = extractFile('src/misc.ts', src)
+  const byName = Object.fromEntries(nodes.map((n) => [n.name, n]))
+  assert.equal(byName.B.purpose, '')
+})

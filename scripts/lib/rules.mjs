@@ -48,13 +48,18 @@ export const DECORATOR_ROUTE_RULES = [
 
 /**
  * Derives a Next App Router path from a file path, or null when the file is not
- * a route. Route groups in parentheses and the app directory itself are dropped.
+ * a route. Anchors on the rightmost `app` segment so a package directory that is
+ * itself named `app` does not leak into the route. Route groups in parentheses
+ * are dropped.
  */
 export function nextRoutePath(path) {
-  const m = path.match(/(?:^|\/)app\/(.*)\/(page|route)\.(tsx?|jsx?)$/)
-  if (!m) return null
-  const segments = m[1]
-    .split('/')
-    .filter((s) => s && !(s.startsWith('(') && s.endsWith(')')))
-  return '/' + segments.join('/')
+  const file = path.match(/\/(page|route)\.(tsx?|jsx?)$/)
+  if (!file) return null
+  const segments = path.slice(0, path.length - file[0].length).split('/')
+  const appIndex = segments.lastIndexOf('app')
+  if (appIndex === -1) return null
+  const rest = segments
+    .slice(appIndex + 1)
+    .filter((s) => !(s.startsWith('(') && s.endsWith(')')))
+  return '/' + rest.join('/')
 }

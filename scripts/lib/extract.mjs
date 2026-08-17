@@ -5,7 +5,7 @@ import { SYMBOL_RULES, TABLE_RULES, DECORATOR_ROUTE_RULES, nextRoutePath } from 
 function purposeAbove(lines, index) {
   for (let i = index - 1; i >= 0 && i >= index - 6; i--) {
     const line = lines[i].trim()
-    if (!line) continue
+    if (!line) return ''
     if (line.startsWith('/**')) return line.replace(/^\/\*\*+/, '').replace(/\*+\/$/, '').trim()
     if (line.startsWith('*')) return line.replace(/^\*+/, '').replace(/\*+\/$/, '').trim()
     if (line.startsWith('//')) return line.replace(/^\/+/, '').trim()
